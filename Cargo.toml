@@ -7,6 +7,5 @@ authors = ["Joerg Zeidler <joerg.zeidler@conplement.de>"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-libics-dm-azure-sys = { path = "../libics-dm-azure-sys", features = ["build_sdk"] }
+libics-dm-azure-sys = { git = "https://github.com/ICS-DeviceManagement/libics-dm-azure-sys", branch = "setup" }
 serde_json = "1.0"
-
