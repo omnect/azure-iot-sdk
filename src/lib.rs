@@ -16,32 +16,48 @@ static IOTHUB: Once = Once::new();
 pub enum IotHubModuleEvent {
     Twin(Value)
 }
-
+#[derive(Debug)]
+pub enum IotHubModuleState {
+    TwinState(DEVICE_TWIN_UPDATE_STATE)
+}
 
 pub struct IotHubModuleClient<'c> {
     handle: IOTHUB_MODULE_CLIENT_LL_HANDLE,
-    callback: Box<dyn FnMut(IotHubModuleEvent) + 'c>
+    callback: Box<dyn FnMut(IotHubModuleEvent, IotHubModuleState) + 'c>
 }
 
 unsafe impl<'c> Send for IotHubModuleClient<'c> {}
 
 impl<'c> IotHubModuleClient<'c> {
+    unsafe extern "C" fn c_unusedCallback(_status: i32, ctx: *mut std::ffi::c_void) {
+
+    }
 
     unsafe extern "C" fn c_twin_callback(state: DEVICE_TWIN_UPDATE_STATE, payload: *const u8, size: u64, ctx: *mut std::ffi::c_void) {
         println!("Received twin callback from hub! {} {}", state, size);
         let client = &mut *(ctx as *mut IotHubModuleClient);
         let data = std::slice::from_raw_parts(payload, usize::try_from(size).unwrap());
-        client.twin_callback(data);
+        client.twin_callback(data, state);
     }
 
-    fn twin_callback(&mut self, data: &[u8]) {
+    fn twin_callback(&mut self, data: &[u8], state: DEVICE_TWIN_UPDATE_STATE) {
         let value = str::from_utf8(data).unwrap();
         let settings: Value = serde_json::from_slice(data).unwrap();
         println!("Received settings {} {}", settings, value);
-        (self.callback)(IotHubModuleEvent::Twin(settings));
+        (self.callback)(IotHubModuleEvent::Twin(settings), IotHubModuleState::TwinState(state));
     }
 
-    pub fn new(callback: impl FnMut(IotHubModuleEvent) + 'c) -> Box<Self> {
+    pub fn twin_report(&mut self, message: &String) {
+        //create null pointer
+        let mut null = 0;
+        let null_ptr = &mut null as *mut _ as *mut std::ffi::c_void;
+        unsafe {
+            IoTHubModuleClient_LL_SendReportedState(self.handle , message.as_ptr(), message.len() as u64, Some(IotHubModuleClient::c_unusedCallback), null_ptr);
+        }
+
+    }
+
+    pub fn new(callback: impl FnMut(IotHubModuleEvent, IotHubModuleState) + 'c) -> Box<Self> {
         //create null pointer
         let mut null = 0 as u8;
         let null_char_ptr = &mut null as *mut _ as *mut std::os::raw::c_char;
@@ -99,21 +115,6 @@ impl<'c> IotHubModuleClient<'c> {
             return client;
         }
     }
-
-    // pub fn send_reported_proberties(&mut self, message: &String) {
-
-    //     println!("send_reported_proberties: {}",message);
-
-    //     //create null pointer
-    //     let mut null = 0;
-    //     let null_ptr = &mut null as *mut _ as *mut std::ffi::c_void;
-
-    //     IoTHubModuleClient_LL_SendReportedState(self.handle , message.as_ptr(), message.len() as u64, Some(c_unusedCallback), null_ptr);
-    // }
-
-    // unsafe extern "C" fn c_unusedCallback(_status: i32, ctx: *mut std::ffi::c_void) {
-
-    // }
 
     pub fn do_work(&mut self) {
         loop {
