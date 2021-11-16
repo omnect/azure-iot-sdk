@@ -1,4 +1,5 @@
 use libics_dm_azure_sys::*;
+use log::debug;
 use std::convert::TryFrom;
 use std::str;
 use std::time;
@@ -33,17 +34,17 @@ pub fn get_connection_info_from_identity_service() -> Result<*mut ::std::os::raw
         opensslEngine: openssl_engine,
         opensslPrivateKey: openssl_private_key,
     };
-    unsafe {
-        let eis_provision_result: EISUtilityResult;
-        let expiry_secs_since_epoch: u64;
-        let information = &mut info as *mut _ as *mut ADUC_ConnectionInfo;
+    let eis_provision_result: EISUtilityResult;
+    let expiry_secs_since_epoch: u64;
+    let information = &mut info as *mut _ as *mut ADUC_ConnectionInfo;
 
-        match time::SystemTime::now().duration_since(time::SystemTime::UNIX_EPOCH) {
-            Ok(n) => {
-                expiry_secs_since_epoch = n.as_secs() + EIS_TOKEN_EXPIRY_TIME;
-            }
-            Err(_) => return Err("SystemTime before UNIX EPOCH!".to_string()),
+    match time::SystemTime::now().duration_since(time::SystemTime::UNIX_EPOCH) {
+        Ok(n) => {
+            expiry_secs_since_epoch = n.as_secs() + EIS_TOKEN_EXPIRY_TIME;
         }
+        Err(_) => return Err("SystemTime before UNIX EPOCH!".to_string()),
+    }
+    unsafe {
         eis_provision_result = RequestConnectionStringFromEISWithExpiry(
             expiry_secs_since_epoch as i64,
             EIS_PROVISIONING_TIMEOUT,
@@ -98,7 +99,7 @@ unsafe extern "C" fn c_twin_callback(
     let data = std::slice::from_raw_parts(payload, usize::try_from(size).unwrap());
     let value = str::from_utf8(data).unwrap();
 
-    println!(
+    debug!(
         "Received twin callback from hub! {} {} {}",
         value, state, size
     );
