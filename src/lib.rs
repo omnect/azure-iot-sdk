@@ -2,18 +2,30 @@ use libics_dm_azure_sys::*;
 use log::debug;
 use std::convert::TryFrom;
 use std::str;
+use std::sync::Once;
 use std::time;
 
 //The timeout for the Edge Identity Service HTTP requests
 const EIS_PROVISIONING_TIMEOUT: u32 = 2000;
+
 const SECONDS_IN_MONTH: u64 = 30 /* day/mo */ * 24 /* hr/day */ * 60 /* min/hr */ * 60 /*sec/min */;
 //Time after startup the connection string will be provisioned for by the Edge Identity Service
+//NOTICE: Such a long expiry date of 3 months was set for demo purposes only.
 const EIS_TOKEN_EXPIRY_TIME: u64 = 3 * SECONDS_IN_MONTH;
 
-pub fn iot_hub_init() -> i32 {
+static IOTHUB: Once = Once::new();
+
+pub fn iot_hub_init() -> Result<(), String> {
     unsafe {
-        let result = IoTHub_Init();
-        result
+        let mut result: i32 = 1;
+        IOTHUB.call_once(|| {
+            result = IoTHub_Init();
+        });
+        if 0 == result {
+            return Ok(());
+        } else {
+            return Err("iot_hub_init not OK!".to_string());
+        }
     }
 }
 
@@ -62,13 +74,17 @@ pub fn get_connection_info_from_identity_service() -> Result<*mut ::std::os::raw
 
 pub fn create_from_connection_string(
     connection_string: *mut ::std::os::raw::c_char,
-) -> IOTHUB_MODULE_CLIENT_LL_HANDLE {
+) -> Result<IOTHUB_MODULE_CLIENT_LL_HANDLE, String> {
     unsafe {
         let handle = IoTHubModuleClient_LL_CreateFromConnectionString(
             connection_string,
             Some(MQTT_Protocol),
         );
-        handle
+        if handle.is_null() {
+            return Err("no valid handle received".to_string());
+        } else {
+            return Ok(handle);
+        }
     }
 }
 
@@ -106,24 +122,30 @@ unsafe extern "C" fn c_twin_callback(
 
     if state == DEVICE_TWIN_UPDATE_STATE_TAG_DEVICE_TWIN_UPDATE_PARTIAL {
         let _handle = ctx as *mut libics_dm_azure_sys::IOTHUB_MODULE_CLIENT_LL_HANDLE_DATA_TAG;
-        let res = serde_json::from_str(value);
-        if res.is_ok() {
-            let mut twin_message: serde_json::Map<String, serde_json::Value> = res.unwrap();
-            twin_message.remove_entry("$version");
-            let message_serialised = serde_json::to_string(&twin_message).unwrap();
 
-            //create null pointer
-            let mut null = 0;
-            let null_ptr = &mut null as *mut _ as *mut std::ffi::c_void;
-            IoTHubModuleClient_LL_SendReportedState(
-                _handle,
-                message_serialised.as_ptr(),
-                message_serialised.len() as u64,
-                Some(c_unused_callback),
-                null_ptr,
-            );
+        let mut twin_message: serde_json::Map<String, serde_json::Value>;
+        match serde_json::from_str(value) {
+            Ok(js) => {
+                twin_message = js;
+                twin_message.remove_entry("$version");
+                let message_serialised = serde_json::to_string(&twin_message).unwrap();
+
+                //create null pointer
+                let mut null = 0;
+                let null_ptr = &mut null as *mut _ as *mut std::ffi::c_void;
+                IoTHubModuleClient_LL_SendReportedState(
+                    _handle,
+                    message_serialised.as_ptr(),
+                    message_serialised.len() as u64,
+                    Some(c_send_reported_callback),
+                    null_ptr,
+                );
+            }
+            Err(_) => debug!("Error Received twin callback parse json"),
         }
     }
 }
 
-unsafe extern "C" fn c_unused_callback(_status: i32, _ctx: *mut std::ffi::c_void) {}
+unsafe extern "C" fn c_send_reported_callback(_status: i32, _ctx: *mut std::ffi::c_void) {
+    debug!("c_send_reported_callback status: {}", _status);
+}
