@@ -7,6 +7,6 @@ authors = ["Joerg Zeidler <joerg.zeidler@conplement.de>"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-libics-dm-azure-sys = { git = "ssh://git@github.com/ICS-DeviceManagement/libics-dm-azure-sys.git", branch = "setup" }
+libics-dm-azure-sys = { git = "ssh://git@github.com/ICS-DeviceManagement/libics-dm-azure-sys.git", branch = "main" }
 serde_json = "1.0"
 log = "0.4"
