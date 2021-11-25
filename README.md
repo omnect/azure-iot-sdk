@@ -1,6 +1,6 @@
 # ics-dm-azure-rs
 
-This repository provides a wrapper of the rust unsafe bindings for the azure-iot-sdk and eis-utils from [libics-dm-azure-sys](https://github.com/ICS-DeviceManagement/libics-dm-azure-sys).
+This repository provides a wrapper of the rust unsafe bindings for the azure-iot-sdk and eis-utils from [ics-dm-azure-sys-rs](https://github.com/ICS-DeviceManagement/ics-dm-azure-sys-rs.git).
 
 # License
 

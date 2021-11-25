@@ -1,4 +1,4 @@
-use libics_dm_azure_sys::*;
+use ics_dm_azure_sys::*;
 use log::debug;
 use std::convert::TryFrom;
 use std::str;
@@ -125,7 +125,7 @@ unsafe extern "C" fn c_twin_callback(
 
     match state {
         DEVICE_TWIN_UPDATE_STATE_TAG_DEVICE_TWIN_UPDATE_PARTIAL => {
-            let _handle = ctx as *mut libics_dm_azure_sys::IOTHUB_MODULE_CLIENT_LL_HANDLE_DATA_TAG;
+            let _handle = ctx as *mut ics_dm_azure_sys::IOTHUB_MODULE_CLIENT_LL_HANDLE_DATA_TAG;
 
             let mut twin_message: serde_json::Map<String, serde_json::Value>;
             match serde_json::from_str(value) {
