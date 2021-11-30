@@ -1,0 +1,12 @@
+[package]
+name = "ics-dm-azure"
+version = "0.1.0"
+edition = "2018"
+authors = ["Joerg Zeidler <joerg.zeidler@conplement.de>"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ics-dm-azure-sys = { git = "ssh://git@github.com/ICS-DeviceManagement/ics-dm-azure-sys-rs.git", branch = "main" }
+serde_json = "1.0"
+log = "0.4"
