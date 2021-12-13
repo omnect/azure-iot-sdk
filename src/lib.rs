@@ -1,6 +1,7 @@
 use ics_dm_azure_sys::*;
 use log::debug;
 use std::convert::TryFrom;
+use std::convert::TryInto;
 use std::str;
 use std::sync::Once;
 use std::time;
@@ -59,7 +60,7 @@ pub fn get_connection_info_from_identity_service() -> Result<String, String> {
     }
     unsafe {
         eis_provision_result = RequestConnectionStringFromEISWithExpiry(
-            expiry_secs_since_epoch as i64,
+            expiry_secs_since_epoch.try_into().unwrap(),
             EIS_PROVISIONING_TIMEOUT,
             information,
         );
@@ -112,7 +113,7 @@ pub fn do_work(handle: IOTHUB_MODULE_CLIENT_LL_HANDLE) {
 unsafe extern "C" fn c_twin_callback(
     state: DEVICE_TWIN_UPDATE_STATE,
     payload: *const u8,
-    size: u64,
+    size: usize,
     ctx: *mut std::ffi::c_void,
 ) {
     let data = std::slice::from_raw_parts(payload, usize::try_from(size).unwrap());
@@ -140,7 +141,7 @@ unsafe extern "C" fn c_twin_callback(
                     IoTHubModuleClient_LL_SendReportedState(
                         _handle,
                         message_serialised.as_ptr(),
-                        message_serialised.len() as u64,
+                        message_serialised.len(),
                         Some(c_send_reported_callback),
                         null_ptr,
                     );
