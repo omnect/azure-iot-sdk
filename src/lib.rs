@@ -1,11 +1,11 @@
 use ics_dm_azure_sys::*;
-use log::debug;
+use log::{debug, info};
 use std::convert::TryFrom;
 use std::convert::TryInto;
+use std::ffi::CString;
 use std::str;
 use std::sync::Once;
 use std::time;
-use std::ffi::CString;
 
 //The timeout for the Edge Identity Service HTTP requests
 const EIS_PROVISIONING_TIMEOUT: u32 = 2000;
@@ -69,7 +69,7 @@ pub fn get_connection_info_from_identity_service() -> Result<String, String> {
         {
             return Err("RequestConnectionStringFromEISWithExpiry".to_string());
         } else {
-            let c_string =  CString::from_raw((*information).connectionString);
+            let c_string = CString::from_raw((*information).connectionString);
             return Ok(c_string.into_string().unwrap());
         }
     }
@@ -79,11 +79,26 @@ pub fn create_from_connection_string(
     connection_string: String,
 ) -> Result<IOTHUB_MODULE_CLIENT_LL_HANDLE, String> {
     unsafe {
-        let c_string = CString::new(connection_string).expect("CString::new connection_string failed");
+        let c_string =
+            CString::new(connection_string).expect("CString::new connection_string failed");
         let handle = IoTHubModuleClient_LL_CreateFromConnectionString(
             c_string.into_raw(),
             Some(MQTT_Protocol),
         );
+
+        // enable azure sdk logging
+        // let c_logtrace = CString::new("logtrace").expect("CString::logtrace failed");
+        // let mut logging = 1 as u8;
+        // let logging_void_ptr = &mut logging as *mut _ as *mut std::os::raw::c_void;
+        // IoTHubModuleClient_LL_SetOption(handle, c_logtrace.into_raw(), logging_void_ptr);
+
+        let handle_c_void = handle as *mut std::ffi::c_void;
+        IoTHubModuleClient_LL_SetConnectionStatusCallback(
+            handle,
+            Some(c_connection_callback),
+            handle_c_void,
+        );
+
         if handle.is_null() {
             return Err("no valid handle received".to_string());
         } else {
@@ -108,6 +123,17 @@ pub fn do_work(handle: IOTHUB_MODULE_CLIENT_LL_HANDLE) {
     unsafe {
         IoTHubModuleClient_LL_DoWork(handle);
     }
+}
+
+unsafe extern "C" fn c_connection_callback(
+    connection_status: IOTHUB_CLIENT_CONNECTION_STATUS,
+    status_reason: IOTHUB_CLIENT_CONNECTION_STATUS_REASON,
+    _ctx: *mut ::std::os::raw::c_void,
+) {
+    info!(
+        "c_connection_callback! {} {}",
+        connection_status, status_reason
+    );
 }
 
 unsafe extern "C" fn c_twin_callback(
