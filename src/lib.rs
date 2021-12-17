@@ -86,12 +86,6 @@ pub fn create_from_connection_string(
             Some(MQTT_Protocol),
         );
 
-        // enable azure sdk logging
-        // let c_logtrace = CString::new("logtrace").expect("CString::logtrace failed");
-        // let mut logging = 1 as u8;
-        // let logging_void_ptr = &mut logging as *mut _ as *mut std::os::raw::c_void;
-        // IoTHubModuleClient_LL_SetOption(handle, c_logtrace.into_raw(), logging_void_ptr);
-
         let handle_c_void = handle as *mut std::ffi::c_void;
         IoTHubModuleClient_LL_SetConnectionStatusCallback(
             handle,
