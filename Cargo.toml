@@ -7,6 +7,6 @@ authors = ["Joerg Zeidler <joerg.zeidler@conplement.de>"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ics-dm-azure-sys = { git = "ssh://git@github.com/ICS-DeviceManagement/ics-dm-azure-sys-rs.git", branch = "main" }
+ics-dm-azure-sys = { git = "ssh://git@github.com:JanZachmann/ics-dm-azure-sys-rs.git", branch = "refactor" }
 serde_json = "1.0"
 log = "0.4"
