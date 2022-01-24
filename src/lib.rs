@@ -31,50 +31,6 @@ pub fn iot_hub_init() -> Result<(), String> {
     }
 }
 
-pub fn get_connection_info_from_identity_service() -> Result<String, String> {
-    //create null pointer
-    let mut null = 0 as u8;
-    let null_char_ptr = &mut null as *mut _ as *mut std::os::raw::c_char;
-
-    let connection_string: *mut ::std::os::raw::c_char = null_char_ptr;
-    let certificate_string: *mut ::std::os::raw::c_char = null_char_ptr;
-    let openssl_engine: *mut ::std::os::raw::c_char = null_char_ptr;
-    let openssl_private_key: *mut ::std::os::raw::c_char = null_char_ptr;
-    let mut info = ADUC_ConnectionInfo {
-        authType: tagADUC_AuthType_ADUC_AuthType_NotSet,
-        connType: tagADUC_ConnType_ADUC_ConnType_NotSet,
-        connectionString: connection_string,
-        certificateString: certificate_string,
-        opensslEngine: openssl_engine,
-        opensslPrivateKey: openssl_private_key,
-    };
-    let eis_provision_result: EISUtilityResult;
-    let expiry_secs_since_epoch: u64;
-    let information = &mut info as *mut _ as *mut ADUC_ConnectionInfo;
-
-    match time::SystemTime::now().duration_since(time::SystemTime::UNIX_EPOCH) {
-        Ok(n) => {
-            expiry_secs_since_epoch = n.as_secs() + EIS_TOKEN_EXPIRY_TIME;
-        }
-        Err(_) => return Err("SystemTime before UNIX EPOCH!".to_string()),
-    }
-    unsafe {
-        eis_provision_result = RequestConnectionStringFromEISWithExpiry(
-            expiry_secs_since_epoch.try_into().unwrap(),
-            EIS_PROVISIONING_TIMEOUT,
-            information,
-        );
-        if (tagEISErr_EISErr_Ok != eis_provision_result.err)
-            && (tagEISService_EISService_Utils != eis_provision_result.service)
-        {
-            return Err("RequestConnectionStringFromEISWithExpiry".to_string());
-        } else {
-            let c_string = CString::from_raw((*information).connectionString);
-            return Ok(c_string.into_string().unwrap());
-        }
-    }
-}
-
 pub fn create_from_connection_string(
     connection_string: String,
 ) -> Result<IOTHUB_MODULE_CLIENT_LL_HANDLE, String> {
