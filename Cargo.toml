@@ -8,7 +8,8 @@ repository = "git@github.com:ICS-DeviceManagement/azure-iot-sdk.git"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-azure-iot-sdk-sys = { git = "ssh://git@github.com/ICS-DeviceManagement/azure-iot-sdk-sys.git", branch = "main" }
+azure-iot-sdk-sys = { path = "/home/osboxes/projects/azure-iot-sdk-sys" }
+#azure-iot-sdk-sys = { git = "ssh://git@github.com/ICS-DeviceManagement/azure-iot-sdk-sys.git", branch = "main" }
 eis-utils = { git = "ssh://git@github.com/ICS-DeviceManagement/eis-utils.git", branch = "main" }
 serde_json = "1.0"
 log = "0.4"
