@@ -1,6 +1,6 @@
+use azure_iot_sdk_sys::*;
 use core::slice;
 use eis_utils::*;
-use azure_iot_sdk_sys::*;
 use log::{debug, error};
 use std::boxed::Box;
 use std::collections::HashMap;
@@ -84,16 +84,29 @@ impl IotHubModuleClient {
         event_handler: impl EventHandler + 'static,
     ) -> Result<Box<Self>, Box<dyn Error + Send + Sync>> {
         IotHubModuleClient::iothub_init()?;
-        let handle = IotHubModuleClient::create_from_connection_string(connection_string)?;
 
-        let mut client = Box::new(IotHubModuleClient {
-            handle,
-            event_handler: Box::new(event_handler),
-        });
+        unsafe {
+            let c_string = CString::new(connection_string)?;
+            let handle = IoTHubModuleClient_LL_CreateFromConnectionString(
+                c_string.into_raw(),
+                Some(MQTT_Protocol),
+            );
 
-        client.set_callbacks()?;
+            if handle.is_null() {
+                return Err(Box::<dyn Error + Send + Sync>::from(
+                    "error while calling IoTHubModuleClient_LL_CreateFromConnectionString()",
+                ));
+            }
 
-        Ok(client)
+            let mut client = Box::new(IotHubModuleClient {
+                handle,
+                event_handler: Box::new(event_handler),
+            });
+
+            client.set_callbacks()?;
+
+            Ok(client)
+        }
     }
 
     pub fn send_message(
@@ -163,26 +176,6 @@ impl IotHubModuleClient {
                     "error while IoTHub_Init()",
                 )),
             }
-        }
-    }
-
-    fn create_from_connection_string(
-        connection_string: &str,
-    ) -> Result<IOTHUB_MODULE_CLIENT_LL_HANDLE, Box<dyn Error + Send + Sync>> {
-        unsafe {
-            let c_string = CString::new(connection_string)?;
-            let handle = IoTHubModuleClient_LL_CreateFromConnectionString(
-                c_string.into_raw(),
-                Some(MQTT_Protocol),
-            );
-
-            if handle.is_null() {
-                return Err(Box::<dyn Error + Send + Sync>::from(
-                    "error while calling IoTHubModuvleClient_LL_SetConnectionStatusCallback()",
-                ));
-            }
-
-            Ok(handle)
         }
     }
 
