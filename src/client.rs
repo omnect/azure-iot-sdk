@@ -111,9 +111,10 @@ impl IotHubModuleClient {
 
     pub fn send_message(
         &self,
-        mut message: Box<IotHubMessage>,
+        mut _message: Box<IotHubMessage>,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         todo!("untested code: don't review yet!");
+        /*
         let output_name = CString::new("output").unwrap();
         unsafe {
             let ctx = message.as_mut() as *mut IotHubMessage as *mut c_void;
@@ -133,6 +134,7 @@ impl IotHubModuleClient {
         }
 
         Ok(())
+        */
     }
 
     pub fn send_reported_state(
