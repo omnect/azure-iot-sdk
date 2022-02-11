@@ -10,8 +10,9 @@ use std::mem;
 use std::str;
 use std::sync::Once;
 use std::time::{Duration, SystemTime};
+use rand::Rng;
 
-use crate::message::IotHubMessage;
+use crate::message::IotMessage;
 
 static mut IOTHUB_INIT_RESULT: i32 = -1;
 static IOTHUB_INIT_ONCE: Once = Once::new();
@@ -34,7 +35,7 @@ pub type DirectMethod = Box<
 >;
 
 pub trait EventHandler {
-    fn handle_message(&self, message: IotHubMessage) -> Result<(), Box<dyn Error + Send + Sync>> {
+    fn handle_message(&self, message: IotMessage) -> Result<(), Box<dyn Error + Send + Sync>> {
         debug!("unhandled call to handle_message(). message: {:?}", message);
         Ok(())
     }
@@ -109,24 +110,26 @@ impl IotHubModuleClient {
         }
     }
 
-    pub fn send_message(
-        &self,
-        mut _message: Box<IotHubMessage>,
+    pub fn send_event(
+        &mut self,
+        mut message: IotMessage,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
-        todo!("untested code: don't review yet!");
-        /*
-        let output_name = CString::new("output").unwrap();
         unsafe {
-            let ctx = message.as_mut() as *mut IotHubMessage as *mut c_void;
-            if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
-                != IoTHubModuleClient_LL_SendEventToOutputAsync(
-                    self.handle,
-                    message.handle,
-                    output_name.as_ptr(),
-                    Some(IotHubModuleClient::c_confirmation_callback),
-                    ctx,
-                )
-            {
+            let handle = message.create_outgoing_handle()?;
+            let queue = message.get_output_queue();
+            let ctx = rand::thread_rng().gen::<u32>();
+
+            debug!("send_event with internal id: {}", ctx);
+
+            let result = IoTHubModuleClient_LL_SendEventToOutputAsync(
+                self.handle,
+                handle,
+                queue.as_ptr(),
+                Some(IotHubModuleClient::c_confirmation_callback),
+                ctx as *mut c_void,
+            );
+
+            if result != IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK {
                 return Err(Box::<dyn Error + Send + Sync>::from(
                     "error while calling IoTHubModuleClient_LL_SendEventToOutputAsync()",
                 ));
@@ -134,7 +137,6 @@ impl IotHubModuleClient {
         }
 
         Ok(())
-        */
     }
 
     pub fn send_reported_state(
@@ -148,13 +150,19 @@ impl IotHubModuleClient {
             let size = reported_state.as_bytes().len();
             let ctx = self as *mut IotHubModuleClient as *mut c_void;
 
-            IoTHubModuleClient_LL_SendReportedState(
-                self.handle,
-                reported_state.into_raw() as *mut u8,
-                size,
-                Some(IotHubModuleClient::c_reported_twin_callback),
-                ctx,
-            );
+            if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
+                != IoTHubModuleClient_LL_SendReportedState(
+                    self.handle,
+                    reported_state.into_raw() as *mut u8,
+                    size,
+                    Some(IotHubModuleClient::c_reported_twin_callback),
+                    ctx,
+                )
+            {
+                return Err(Box::<dyn Error + Send + Sync>::from(
+                    "error while calling IoTHubModuleClient_LL_SendReportedState()",
+                ));
+            }
         }
 
         Ok(())
@@ -266,7 +274,7 @@ impl IotHubModuleClient {
         handle: *mut IOTHUB_MESSAGE_HANDLE_DATA_TAG,
         ctx: *mut ::std::os::raw::c_void,
     ) -> IOTHUBMESSAGE_DISPOSITION_RESULT {
-        let message = IotHubMessage::from_handle(handle);
+        let message = IotMessage::from_incoming_handle(handle);
         let client = &mut *(ctx as *mut IotHubModuleClient);
 
         debug!("Received message from iothub: {:?}", message);
@@ -381,9 +389,9 @@ impl IotHubModuleClient {
 
     unsafe extern "C" fn c_confirmation_callback(
         status: IOTHUB_CLIENT_RESULT,
-        _ctx: *mut std::ffi::c_void,
+        ctx: *mut std::ffi::c_void,
     ) {
-        debug!("Received confirmation from iothub. status: {}", status);
+        debug!("Received confirmation from iothub for event with internal id: {} and status: {}", ctx as u32, status);
     }
 }
 
