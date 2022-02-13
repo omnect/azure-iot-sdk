@@ -1,4 +1,5 @@
 use azure_iot_sdk_sys::*;
+use log::error;
 use std::boxed::Box;
 use std::collections::HashMap;
 use std::error::Error;
@@ -16,15 +17,15 @@ impl Default for Direction {
     }
 }
 
-/// Message used in body of communication
+/// message either representing incoming C2D message or an outgoing D2C message
 #[derive(Default, Debug)]
 pub struct IotMessage {
     handle: Option<IOTHUB_MESSAGE_HANDLE>,
     body: Vec<u8>,
-    output_queue: String,
+    output_queue: CString,
     direction: Direction,
-    properties: HashMap<String, String>,
-    system_properties: HashMap<String, CString>,
+    properties: HashMap<CString, CString>,
+    system_properties: HashMap<&'static str, CString>,
 }
 
 unsafe impl Send for IotMessage {}
@@ -32,29 +33,15 @@ unsafe impl Sync for IotMessage {}
 
 impl Drop for IotMessage {
     fn drop(&mut self) {
-        if let Some(handle) = self.handle {
-            unsafe {
-                IoTHubMessage_Destroy(handle);
-            }
-        }
+        self.destroy_handle()
     }
 }
-
-/* impl Clone for IotMessage {
-    fn clone(&self) -> Self {
-        let handle = unsafe { IoTHubMessage_Clone(self.handle) };
-        if handle == std::ptr::null_mut() {
-            panic!("Failed to allocate message");
-        }
-        IotMessage { handle, own: true }
-    }
-} */
 
 impl IotMessage {
     /// Get a builder instance for building up a message
     pub fn builder() -> IotMessageBuilder {
         IotMessageBuilder {
-            output_queue: "output".to_string(),
+            output_queue: CString::new("output").unwrap(),
             ..Default::default()
         }
     }
@@ -62,76 +49,101 @@ impl IotMessage {
     /// Create an instance from an incoming C2D message
     pub fn from_incoming_handle(_handle: IOTHUB_MESSAGE_HANDLE) -> Self {
         todo!("implement with a C2D device twin example, since module twins are not supported for such a scenario.");
-        // use IoTHubMessage_Get... functions to create a message instance
         /*
-        IoTHubMessage_GetMessageId(handle, "MSG_ID".);
-        IoTHubMessage_GetCorrelationId(handle, "CORE_ID");
-        IoTHubMessage_GetContentTypeSystemProperty
-        IoTHubMessage_GetContentEncodingSystemProperty
-        IoTHubMessage_GetProperty
+            // use IoTHubMessage_Get... functions to create a message instance
+            IoTHubMessage_GetMessageId(handle, "MSG_ID".);
+            IoTHubMessage_GetCorrelationId(handle, "CORE_ID");
+            IoTHubMessage_GetContentTypeSystemProperty
+            IoTHubMessage_GetContentEncodingSystemProperty
+            IoTHubMessage_GetProperty
         */
     }
 
-    /// Create
+    /// Create message handle
     pub fn create_outgoing_handle(
         &mut self,
     ) -> Result<IOTHUB_MESSAGE_HANDLE, Box<dyn Error + Send + Sync>> {
         assert_eq!(self.direction, Direction::Outgoing);
 
-        if None == self.handle {
-            unsafe {
-                let handle = IoTHubMessage_CreateFromByteArray(self.body.as_ptr(), self.body.len());
+        self.destroy_handle();
 
-                if handle.is_null() {
-                    return Err(Box::<dyn Error + Send + Sync>::from(
-                        "error while calling IoTHubMessage_CreateFromByteArray()",
-                    ));
-                }
+        unsafe {
+            let handle = IoTHubMessage_CreateFromByteArray(self.body.as_ptr(), self.body.len());
 
-                if let Some(id) = self.system_properties.get("$.mid") {
-                    if IOTHUB_MESSAGE_RESULT_TAG_IOTHUB_MESSAGE_OK
-                        != IoTHubMessage_SetMessageId(handle, id.as_ptr())
-                    {
-                        return Err(Box::<dyn Error + Send + Sync>::from(
-                            "error while calling IoTHubMessage_SetMessageId()",
-                        ));
-                    }
-                }
-
-                if let Some(id) = self.system_properties.get("$.cid") {
-                    if IOTHUB_MESSAGE_RESULT_TAG_IOTHUB_MESSAGE_OK
-                        != IoTHubMessage_SetCorrelationId(handle, id.as_ptr())
-                    {
-                        return Err(Box::<dyn Error + Send + Sync>::from(
-                            "error while calling IoTHubMessage_SetCorrelationId()",
-                        ));
-                    }
-                }
-                /*
-                IoTHubMessage_SetContentTypeSystemProperty
-                IoTHubMessage_SetContentEncodingSystemProperty
-                IoTHubMessage_SetProperty
-                */
-
-                self.handle = Some(handle);
+            if handle.is_null() {
+                return Err(Box::<dyn Error + Send + Sync>::from(
+                    "error while calling IoTHubMessage_CreateFromByteArray()",
+                ));
             }
+
+            for (&key, value) in &self.system_properties {
+                let res = match key {
+                    "$.mid" => IoTHubMessage_SetMessageId(handle, value.as_ptr()),
+                    "$.cid" => IoTHubMessage_SetCorrelationId(handle, value.as_ptr()),
+                    "$.ct" => IoTHubMessage_SetContentTypeSystemProperty(handle, value.as_ptr()),
+                    "$.ce" => {
+                        IoTHubMessage_SetContentEncodingSystemProperty(handle, value.as_ptr())
+                    }
+                    _ => {
+                        error!(
+                            "unknown system property found: {}, {}",
+                            key,
+                            value.to_str().unwrap()
+                        );
+                        IOTHUB_MESSAGE_RESULT_TAG_IOTHUB_MESSAGE_OK
+                    }
+                };
+
+                if res != IOTHUB_MESSAGE_RESULT_TAG_IOTHUB_MESSAGE_OK {
+                    return Err(Box::<dyn Error + Send + Sync>::from(format!(
+                        "error while setting system property for: {}, {}",
+                        key,
+                        value.to_str().unwrap()
+                    )));
+                }
+            }
+
+            for (key, value) in &self.properties {
+                if IOTHUB_MESSAGE_RESULT_TAG_IOTHUB_MESSAGE_OK
+                    != IoTHubMessage_SetProperty(handle, key.as_ptr(), value.as_ptr())
+                {
+                    return Err(Box::<dyn Error + Send + Sync>::from(format!(
+                        "error while setting property for: {}, {}",
+                        key.to_str().unwrap(),
+                        value.to_str().unwrap()
+                    )));
+                }
+            }
+
+            self.handle = Some(handle);
         }
 
         Ok(self.handle.unwrap())
     }
 
+    /// get name of output queue to be used with this message
     pub fn get_output_queue(&self) -> CString {
-        CString::new(self.output_queue.clone()).unwrap()
+        self.output_queue.clone()
+    }
+
+    fn destroy_handle(&mut self) {
+        if let Some(handle) = self.handle {
+            unsafe {
+                IoTHubMessage_Destroy(handle);
+
+                self.handle = None;
+            }
+        }
     }
 }
 
-/// Builder for constructing Message instances
+/// Builder for constructing outgoing D2C message instances
 #[derive(Debug, Default)]
 pub struct IotMessageBuilder {
     message: Option<Vec<u8>>,
-    output_queue: String,
-    properties: HashMap<String, String>,
-    system_properties: HashMap<String, CString>,
+    output_queue: CString,
+    properties: HashMap<CString, CString>,
+    system_properties: HashMap<&'static str, CString>,
 }
 
 impl IotMessageBuilder {
@@ -142,7 +154,7 @@ impl IotMessageBuilder {
     }
 
     /// Set the identifier for this message
-    pub fn set_message_id(self, mid: String) -> Self {
+    pub fn set_id(self, mid: String) -> Self {
         self.set_system_property("$.mid", mid)
     }
 
@@ -163,14 +175,16 @@ impl IotMessageBuilder {
         self.set_system_property("$.ce", content_encoding)
     }
 
+    /// Set the output queue to be used with this message.
     pub fn set_output_queue(mut self, queue: String) -> Self {
-        self.output_queue = queue;
+        self.output_queue = CString::new(queue).unwrap();
         self
     }
 
     /// Add a message property
-    pub fn set_message_property(mut self, key: &str, value: String) -> Self {
-        self.properties.insert(key.to_owned(), value);
+    pub fn set_property(mut self, key: String, value: String) -> Self {
+        self.properties
+            .insert(CString::new(key).unwrap(), CString::new(value).unwrap());
         self
     }
 
@@ -192,9 +206,9 @@ impl IotMessageBuilder {
     /// https://github.com/Azure/azure-iot-sdk-csharp/blob/67f8c75576edfcbc20e23a01afc88be47552e58c/iothub/device/src/Transport/Mqtt/MqttIotHubAdapter.cs#L1068-L1086
     /// If you need to add support for a new property,
     /// you should create a new public function that sets the appropriate wire id.
-    fn set_system_property(mut self, property_name: &str, value: String) -> Self {
+    fn set_system_property(mut self, property_name: &'static str, value: String) -> Self {
         self.system_properties
-            .insert(property_name.to_owned(), CString::new(value).unwrap());
+            .insert(property_name, CString::new(value).unwrap());
         self
     }
 }
