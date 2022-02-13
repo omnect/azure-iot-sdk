@@ -110,7 +110,7 @@ impl IotHubModuleClient {
         }
     }
 
-    pub fn send_event(
+    pub fn send_d2c_message(
         &mut self,
         mut message: IotMessage,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -125,7 +125,7 @@ impl IotHubModuleClient {
                 self.handle,
                 handle,
                 queue.as_ptr(),
-                Some(IotHubModuleClient::c_confirmation_callback),
+                Some(IotHubModuleClient::c_d2c_confirmation_callback),
                 ctx as *mut c_void,
             );
 
@@ -196,7 +196,7 @@ impl IotHubModuleClient {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubModuleClient_LL_SetConnectionStatusCallback(
                     self.handle,
-                    Some(IotHubModuleClient::c_connection_callback),
+                    Some(IotHubModuleClient::c_connection_status_callback),
                     ctx,
                 )
             {
@@ -210,7 +210,7 @@ impl IotHubModuleClient {
                 != IoTHubModuleClient_LL_SetInputMessageCallback(
                     self.handle,
                     input_name.as_ptr(),
-                    Some(IotHubModuleClient::c_message_callback),
+                    Some(IotHubModuleClient::c_c2d_message_callback),
                     ctx,
                 )
             {
@@ -222,7 +222,7 @@ impl IotHubModuleClient {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubModuleClient_LL_SetModuleTwinCallback(
                     self.handle,
-                    Some(IotHubModuleClient::c_twin_callback),
+                    Some(IotHubModuleClient::c_desired_twin_callback),
                     ctx,
                 )
             {
@@ -234,7 +234,7 @@ impl IotHubModuleClient {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubModuleClient_LL_GetTwinAsync(
                     self.handle,
-                    Some(IotHubModuleClient::c_twin_async_callback),
+                    Some(IotHubModuleClient::c_get_twin_async_callback),
                     ctx,
                 )
             {
@@ -246,7 +246,7 @@ impl IotHubModuleClient {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubModuleClient_LL_SetModuleMethodCallback(
                     self.handle,
-                    Some(IotHubModuleClient::c_method_callback),
+                    Some(IotHubModuleClient::c_direct_method_callback),
                     ctx,
                 )
             {
@@ -259,7 +259,7 @@ impl IotHubModuleClient {
         }
     }
 
-    unsafe extern "C" fn c_connection_callback(
+    unsafe extern "C" fn c_connection_status_callback(
         connection_status: IOTHUB_CLIENT_CONNECTION_STATUS,
         status_reason: IOTHUB_CLIENT_CONNECTION_STATUS_REASON,
         _ctx: *mut ::std::os::raw::c_void,
@@ -270,7 +270,7 @@ impl IotHubModuleClient {
         );
     }
 
-    unsafe extern "C" fn c_message_callback(
+    unsafe extern "C" fn c_c2d_message_callback(
         handle: *mut IOTHUB_MESSAGE_HANDLE_DATA_TAG,
         ctx: *mut ::std::os::raw::c_void,
     ) -> IOTHUBMESSAGE_DISPOSITION_RESULT {
@@ -285,7 +285,7 @@ impl IotHubModuleClient {
         }
     }
 
-    unsafe extern "C" fn c_twin_callback(
+    unsafe extern "C" fn c_desired_twin_callback(
         state: DEVICE_TWIN_UPDATE_STATE,
         payload: *const ::std::os::raw::c_uchar,
         size: usize,
@@ -307,7 +307,7 @@ impl IotHubModuleClient {
             .unwrap();
     }
 
-    unsafe extern "C" fn c_twin_async_callback(
+    unsafe extern "C" fn c_get_twin_async_callback(
         state: DEVICE_TWIN_UPDATE_STATE,
         payload: *const ::std::os::raw::c_uchar,
         size: usize,
@@ -333,7 +333,7 @@ impl IotHubModuleClient {
         }
     }
 
-    unsafe extern "C" fn c_method_callback(
+    unsafe extern "C" fn c_direct_method_callback(
         method_name: *const ::std::os::raw::c_char,
         payload: *const ::std::os::raw::c_uchar,
         size: usize,
@@ -387,7 +387,7 @@ impl IotHubModuleClient {
         METHOD_RESPONSE_ERROR
     }
 
-    unsafe extern "C" fn c_confirmation_callback(
+    unsafe extern "C" fn c_d2c_confirmation_callback(
         status: IOTHUB_CLIENT_RESULT,
         ctx: *mut std::ffi::c_void,
     ) {
