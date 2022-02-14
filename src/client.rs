@@ -2,6 +2,7 @@ use azure_iot_sdk_sys::*;
 use core::slice;
 use eis_utils::*;
 use log::{debug, error};
+use rand::Rng;
 use std::boxed::Box;
 use std::collections::HashMap;
 use std::error::Error;
@@ -10,7 +11,6 @@ use std::mem;
 use std::str;
 use std::sync::Once;
 use std::time::{Duration, SystemTime};
-use rand::Rng;
 
 use crate::message::IotMessage;
 
@@ -113,7 +113,7 @@ impl IotHubModuleClient {
     pub fn send_d2c_message(
         &mut self,
         mut message: IotMessage,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> Result<u32, Box<dyn Error + Send + Sync>> {
         unsafe {
             let handle = message.create_outgoing_handle()?;
             let queue = message.get_output_queue();
@@ -134,9 +134,9 @@ impl IotHubModuleClient {
                     "error while calling IoTHubModuleClient_LL_SendEventToOutputAsync()",
                 ));
             }
-        }
 
-        Ok(())
+            Ok(ctx)
+        }
     }
 
     pub fn send_reported_state(
@@ -391,7 +391,10 @@ impl IotHubModuleClient {
         status: IOTHUB_CLIENT_RESULT,
         ctx: *mut std::ffi::c_void,
     ) {
-        debug!("Received confirmation from iothub for event with internal id: {} and status: {}", ctx as u32, status);
+        debug!(
+            "Received confirmation from iothub for event with internal id: {} and status: {}",
+            ctx as u32, status
+        );
     }
 }
 
