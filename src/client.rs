@@ -2,6 +2,7 @@ use azure_iot_sdk_sys::*;
 use core::slice;
 use eis_utils::*;
 use log::{debug, error};
+use rand::Rng;
 use std::boxed::Box;
 use std::collections::HashMap;
 use std::error::Error;
@@ -10,7 +11,6 @@ use std::mem;
 use std::str;
 use std::sync::Once;
 use std::time::{Duration, SystemTime};
-use rand::Rng;
 
 use crate::message::IotMessage;
 
@@ -29,13 +29,35 @@ pub enum TwinUpdateState {
     Partial = 1,
 }
 
+#[derive(Debug)]
+pub enum UnauthenticatedReason {
+    ExpiredSasToken,
+    DeviceDisabled,
+    BadCredential,
+    RetryExpired,
+    NoNetwork,
+    CommunicationError,
+}
+
+#[derive(Debug)]
+pub enum AuthenticationStatus {
+    Authenticated,
+    Unauthenticated(UnauthenticatedReason),
+}
+
 pub type DirectMethod = Box<
     (dyn Fn(serde_json::Value) -> Result<Option<serde_json::Value>, Box<dyn Error + Send + Sync>>
          + Send),
 >;
 
 pub trait EventHandler {
-    fn handle_message(&self, message: IotMessage) -> Result<(), Box<dyn Error + Send + Sync>> {
+    fn handle_connection_status(
+        &self,
+        _auth_status: AuthenticationStatus,
+    ) {
+    }
+
+    fn handle_c2d_message(&self, message: IotMessage) -> Result<(), Box<dyn Error + Send + Sync>> {
         debug!("unhandled call to handle_message(). message: {:?}", message);
         Ok(())
     }
@@ -259,15 +281,48 @@ impl IotHubModuleClient {
         }
     }
 
+    //#[allow(unused_variables, non_snake_case)]
     unsafe extern "C" fn c_connection_status_callback(
         connection_status: IOTHUB_CLIENT_CONNECTION_STATUS,
         status_reason: IOTHUB_CLIENT_CONNECTION_STATUS_REASON,
-        _ctx: *mut ::std::os::raw::c_void,
+        ctx: *mut ::std::os::raw::c_void,
     ) {
-        debug!(
-            "Received connection status: {} reason: {}",
-            connection_status, status_reason
-        );
+        let client = &mut *(ctx as *mut IotHubModuleClient);
+        let status = match connection_status {
+            IOTHUB_CLIENT_CONNECTION_STATUS_TAG_IOTHUB_CLIENT_CONNECTION_AUTHENTICATED => {
+                AuthenticationStatus::Authenticated
+            }
+            IOTHUB_CLIENT_CONNECTION_STATUS_TAG_IOTHUB_CLIENT_CONNECTION_UNAUTHENTICATED => {
+                match status_reason {
+                    IOTHUB_CLIENT_CONNECTION_STATUS_REASON_TAG_IOTHUB_CLIENT_CONNECTION_EXPIRED_SAS_TOKEN => {
+                        AuthenticationStatus::Unauthenticated(UnauthenticatedReason::ExpiredSasToken)
+                    }
+                    IOTHUB_CLIENT_CONNECTION_STATUS_REASON_TAG_IOTHUB_CLIENT_CONNECTION_DEVICE_DISABLED => {
+                        AuthenticationStatus::Unauthenticated(UnauthenticatedReason::DeviceDisabled)
+                    }
+                    IOTHUB_CLIENT_CONNECTION_STATUS_REASON_TAG_IOTHUB_CLIENT_CONNECTION_BAD_CREDENTIAL => {
+                        AuthenticationStatus::Unauthenticated(UnauthenticatedReason::BadCredential)
+                    }
+                    IOTHUB_CLIENT_CONNECTION_STATUS_REASON_TAG_IOTHUB_CLIENT_CONNECTION_RETRY_EXPIRED => {
+                        AuthenticationStatus::Unauthenticated(UnauthenticatedReason::RetryExpired)
+                    }
+                    IOTHUB_CLIENT_CONNECTION_STATUS_REASON_TAG_IOTHUB_CLIENT_CONNECTION_NO_NETWORK => {
+                        AuthenticationStatus::Unauthenticated(UnauthenticatedReason::NoNetwork)
+                    }
+                    IOTHUB_CLIENT_CONNECTION_STATUS_REASON_TAG_IOTHUB_CLIENT_CONNECTION_COMMUNICATION_ERROR => {
+                        AuthenticationStatus::Unauthenticated(UnauthenticatedReason::CommunicationError)
+                    }
+                    _ => panic!("unknown unauthenticated reason"),
+                }
+            }
+            _ => panic!("unknown authenticated state"),
+        };
+
+        debug!("Received connection status: {:?}", status);
+
+        client
+            .event_handler
+            .handle_connection_status(status)
     }
 
     unsafe extern "C" fn c_c2d_message_callback(
@@ -279,7 +334,7 @@ impl IotHubModuleClient {
 
         debug!("Received message from iothub: {:?}", message);
 
-        match client.event_handler.handle_message(message) {
+        match client.event_handler.handle_c2d_message(message) {
             Result::Ok(_) => IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_ACCEPTED,
             Result::Err(_) => IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_REJECTED,
         }
@@ -391,7 +446,10 @@ impl IotHubModuleClient {
         status: IOTHUB_CLIENT_RESULT,
         ctx: *mut std::ffi::c_void,
     ) {
-        debug!("Received confirmation from iothub for event with internal id: {} and status: {}", ctx as u32, status);
+        debug!(
+            "Received confirmation from iothub for event with internal id: {} and status: {}",
+            ctx as u32, status
+        );
     }
 }
 
