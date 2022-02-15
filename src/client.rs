@@ -2,6 +2,7 @@ use azure_iot_sdk_sys::*;
 use core::slice;
 use eis_utils::*;
 use log::{debug, error};
+use rand::Rng;
 use std::boxed::Box;
 use std::collections::HashMap;
 use std::error::Error;
@@ -11,7 +12,7 @@ use std::str;
 use std::sync::Once;
 use std::time::{Duration, SystemTime};
 
-use crate::message::IotHubMessage;
+use crate::message::IotMessage;
 
 static mut IOTHUB_INIT_RESULT: i32 = -1;
 static IOTHUB_INIT_ONCE: Once = Once::new();
@@ -34,7 +35,7 @@ pub type DirectMethod = Box<
 >;
 
 pub trait EventHandler {
-    fn handle_message(&self, message: IotHubMessage) -> Result<(), Box<dyn Error + Send + Sync>> {
+    fn handle_message(&self, message: IotMessage) -> Result<(), Box<dyn Error + Send + Sync>> {
         debug!("unhandled call to handle_message(). message: {:?}", message);
         Ok(())
     }
@@ -109,32 +110,33 @@ impl IotHubModuleClient {
         }
     }
 
-    pub fn send_message(
-        &self,
-        mut _message: Box<IotHubMessage>,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
-        todo!("untested code: don't review yet!");
-        /*
-        let output_name = CString::new("output").unwrap();
+    pub fn send_d2c_message(
+        &mut self,
+        mut message: IotMessage,
+    ) -> Result<u32, Box<dyn Error + Send + Sync>> {
         unsafe {
-            let ctx = message.as_mut() as *mut IotHubMessage as *mut c_void;
-            if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
-                != IoTHubModuleClient_LL_SendEventToOutputAsync(
-                    self.handle,
-                    message.handle,
-                    output_name.as_ptr(),
-                    Some(IotHubModuleClient::c_confirmation_callback),
-                    ctx,
-                )
-            {
+            let handle = message.create_outgoing_handle()?;
+            let queue = message.get_output_queue();
+            let ctx = rand::thread_rng().gen::<u32>();
+
+            debug!("send_event with internal id: {}", ctx);
+
+            let result = IoTHubModuleClient_LL_SendEventToOutputAsync(
+                self.handle,
+                handle,
+                queue.as_ptr(),
+                Some(IotHubModuleClient::c_d2c_confirmation_callback),
+                ctx as *mut c_void,
+            );
+
+            if result != IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK {
                 return Err(Box::<dyn Error + Send + Sync>::from(
                     "error while calling IoTHubModuleClient_LL_SendEventToOutputAsync()",
                 ));
             }
-        }
 
-        Ok(())
-        */
+            Ok(ctx)
+        }
     }
 
     pub fn send_reported_state(
@@ -148,13 +150,19 @@ impl IotHubModuleClient {
             let size = reported_state.as_bytes().len();
             let ctx = self as *mut IotHubModuleClient as *mut c_void;
 
-            IoTHubModuleClient_LL_SendReportedState(
-                self.handle,
-                reported_state.into_raw() as *mut u8,
-                size,
-                Some(IotHubModuleClient::c_reported_twin_callback),
-                ctx,
-            );
+            if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
+                != IoTHubModuleClient_LL_SendReportedState(
+                    self.handle,
+                    reported_state.into_raw() as *mut u8,
+                    size,
+                    Some(IotHubModuleClient::c_reported_twin_callback),
+                    ctx,
+                )
+            {
+                return Err(Box::<dyn Error + Send + Sync>::from(
+                    "error while calling IoTHubModuleClient_LL_SendReportedState()",
+                ));
+            }
         }
 
         Ok(())
@@ -188,7 +196,7 @@ impl IotHubModuleClient {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubModuleClient_LL_SetConnectionStatusCallback(
                     self.handle,
-                    Some(IotHubModuleClient::c_connection_callback),
+                    Some(IotHubModuleClient::c_connection_status_callback),
                     ctx,
                 )
             {
@@ -202,7 +210,7 @@ impl IotHubModuleClient {
                 != IoTHubModuleClient_LL_SetInputMessageCallback(
                     self.handle,
                     input_name.as_ptr(),
-                    Some(IotHubModuleClient::c_message_callback),
+                    Some(IotHubModuleClient::c_c2d_message_callback),
                     ctx,
                 )
             {
@@ -214,7 +222,7 @@ impl IotHubModuleClient {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubModuleClient_LL_SetModuleTwinCallback(
                     self.handle,
-                    Some(IotHubModuleClient::c_twin_callback),
+                    Some(IotHubModuleClient::c_desired_twin_callback),
                     ctx,
                 )
             {
@@ -226,7 +234,7 @@ impl IotHubModuleClient {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubModuleClient_LL_GetTwinAsync(
                     self.handle,
-                    Some(IotHubModuleClient::c_twin_async_callback),
+                    Some(IotHubModuleClient::c_get_twin_async_callback),
                     ctx,
                 )
             {
@@ -238,7 +246,7 @@ impl IotHubModuleClient {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubModuleClient_LL_SetModuleMethodCallback(
                     self.handle,
-                    Some(IotHubModuleClient::c_method_callback),
+                    Some(IotHubModuleClient::c_direct_method_callback),
                     ctx,
                 )
             {
@@ -251,7 +259,7 @@ impl IotHubModuleClient {
         }
     }
 
-    unsafe extern "C" fn c_connection_callback(
+    unsafe extern "C" fn c_connection_status_callback(
         connection_status: IOTHUB_CLIENT_CONNECTION_STATUS,
         status_reason: IOTHUB_CLIENT_CONNECTION_STATUS_REASON,
         _ctx: *mut ::std::os::raw::c_void,
@@ -262,11 +270,11 @@ impl IotHubModuleClient {
         );
     }
 
-    unsafe extern "C" fn c_message_callback(
+    unsafe extern "C" fn c_c2d_message_callback(
         handle: *mut IOTHUB_MESSAGE_HANDLE_DATA_TAG,
         ctx: *mut ::std::os::raw::c_void,
     ) -> IOTHUBMESSAGE_DISPOSITION_RESULT {
-        let message = IotHubMessage::from_handle(handle);
+        let message = IotMessage::from_incoming_handle(handle);
         let client = &mut *(ctx as *mut IotHubModuleClient);
 
         debug!("Received message from iothub: {:?}", message);
@@ -277,7 +285,7 @@ impl IotHubModuleClient {
         }
     }
 
-    unsafe extern "C" fn c_twin_callback(
+    unsafe extern "C" fn c_desired_twin_callback(
         state: DEVICE_TWIN_UPDATE_STATE,
         payload: *const ::std::os::raw::c_uchar,
         size: usize,
@@ -299,7 +307,7 @@ impl IotHubModuleClient {
             .unwrap();
     }
 
-    unsafe extern "C" fn c_twin_async_callback(
+    unsafe extern "C" fn c_get_twin_async_callback(
         state: DEVICE_TWIN_UPDATE_STATE,
         payload: *const ::std::os::raw::c_uchar,
         size: usize,
@@ -325,7 +333,7 @@ impl IotHubModuleClient {
         }
     }
 
-    unsafe extern "C" fn c_method_callback(
+    unsafe extern "C" fn c_direct_method_callback(
         method_name: *const ::std::os::raw::c_char,
         payload: *const ::std::os::raw::c_uchar,
         size: usize,
@@ -379,11 +387,14 @@ impl IotHubModuleClient {
         METHOD_RESPONSE_ERROR
     }
 
-    unsafe extern "C" fn c_confirmation_callback(
+    unsafe extern "C" fn c_d2c_confirmation_callback(
         status: IOTHUB_CLIENT_RESULT,
-        _ctx: *mut std::ffi::c_void,
+        ctx: *mut std::ffi::c_void,
     ) {
-        debug!("Received confirmation from iothub. status: {}", status);
+        debug!(
+            "Received confirmation from iothub for event with internal id: {} and status: {}",
+            ctx as u32, status
+        );
     }
 }
 
