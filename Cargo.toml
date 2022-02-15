@@ -1,6 +1,6 @@
 [package]
 name = "azure-iot-sdk"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2018"
 authors = ["Joerg Zeidler <joerg.zeidler@conplement.de>", "Jan Zachmann <jan.zachmann@conplement.de>"]
 repository = "git@github.com:ICS-DeviceManagement/azure-iot-sdk.git"
