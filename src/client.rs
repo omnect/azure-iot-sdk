@@ -51,11 +51,7 @@ pub type DirectMethod = Box<
 >;
 
 pub trait EventHandler {
-    fn handle_connection_status(
-        &self,
-        _auth_status: AuthenticationStatus,
-    ) {
-    }
+    fn handle_connection_status(&self, _auth_status: AuthenticationStatus) {}
 
     fn handle_c2d_message(&self, message: IotMessage) -> Result<(), Box<dyn Error + Send + Sync>> {
         debug!("unhandled call to handle_message(). message: {:?}", message);
@@ -294,7 +290,9 @@ impl IotHubModuleClient {
             IOTHUB_CLIENT_CONNECTION_STATUS_TAG_IOTHUB_CLIENT_CONNECTION_UNAUTHENTICATED => {
                 match status_reason {
                     IOTHUB_CLIENT_CONNECTION_STATUS_REASON_TAG_IOTHUB_CLIENT_CONNECTION_EXPIRED_SAS_TOKEN => {
-                        AuthenticationStatus::Unauthenticated(UnauthenticatedReason::ExpiredSasToken)
+                        AuthenticationStatus::Unauthenticated(
+                            UnauthenticatedReason::ExpiredSasToken,
+                        )
                     }
                     IOTHUB_CLIENT_CONNECTION_STATUS_REASON_TAG_IOTHUB_CLIENT_CONNECTION_DEVICE_DISABLED => {
                         AuthenticationStatus::Unauthenticated(UnauthenticatedReason::DeviceDisabled)
@@ -309,19 +307,25 @@ impl IotHubModuleClient {
                         AuthenticationStatus::Unauthenticated(UnauthenticatedReason::NoNetwork)
                     }
                     IOTHUB_CLIENT_CONNECTION_STATUS_REASON_TAG_IOTHUB_CLIENT_CONNECTION_COMMUNICATION_ERROR => {
-                        AuthenticationStatus::Unauthenticated(UnauthenticatedReason::CommunicationError)
+                        AuthenticationStatus::Unauthenticated(
+                            UnauthenticatedReason::CommunicationError,
+                        )
                     }
-                    _ => panic!("unknown unauthenticated reason"),
+                    _ => {
+                        error!("unknown unauthenticated reason");
+                        return;
+                    }
                 }
             }
-            _ => panic!("unknown authenticated state"),
+            _ => {
+                error!("unknown authenticated state");
+                return;
+            }
         };
 
         debug!("Received connection status: {:?}", status);
 
-        client
-            .event_handler
-            .handle_connection_status(status)
+        client.event_handler.handle_connection_status(status)
     }
 
     unsafe extern "C" fn c_c2d_message_callback(
