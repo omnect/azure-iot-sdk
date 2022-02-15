@@ -135,7 +135,7 @@ impl IotHubModuleClient {
     pub fn send_d2c_message(
         &mut self,
         mut message: IotMessage,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> Result<u32, Box<dyn Error + Send + Sync>> {
         unsafe {
             let handle = message.create_outgoing_handle()?;
             let queue = message.get_output_queue();
@@ -156,9 +156,9 @@ impl IotHubModuleClient {
                     "error while calling IoTHubModuleClient_LL_SendEventToOutputAsync()",
                 ));
             }
-        }
 
-        Ok(())
+            Ok(ctx)
+        }
     }
 
     pub fn send_reported_state(
@@ -281,7 +281,6 @@ impl IotHubModuleClient {
         }
     }
 
-    //#[allow(unused_variables, non_snake_case)]
     unsafe extern "C" fn c_connection_status_callback(
         connection_status: IOTHUB_CLIENT_CONNECTION_STATUS,
         status_reason: IOTHUB_CLIENT_CONNECTION_STATUS_REASON,
