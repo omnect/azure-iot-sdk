@@ -1,9 +1,11 @@
 use azure_iot_sdk_sys::*;
-use log::error;
+use log::{info, error};
 use std::boxed::Box;
 use std::collections::HashMap;
 use std::error::Error;
+use std::ffi::CStr;
 use std::ffi::CString;
+use std::slice;
 
 #[derive(Debug, PartialEq)]
 pub enum Direction {
@@ -21,11 +23,11 @@ impl Default for Direction {
 #[derive(Default, Debug)]
 pub struct IotMessage {
     handle: Option<IOTHUB_MESSAGE_HANDLE>,
-    body: Vec<u8>,
-    output_queue: CString,
-    direction: Direction,
-    properties: HashMap<CString, CString>,
-    system_properties: HashMap<&'static str, CString>,
+    pub body: Vec<u8>,
+    pub output_queue: CString,
+    pub direction: Direction,
+    pub properties: HashMap<CString, CString>,
+    pub system_properties: HashMap<&'static str, CString>,
 }
 
 unsafe impl Send for IotMessage {}
@@ -33,7 +35,9 @@ unsafe impl Sync for IotMessage {}
 
 impl Drop for IotMessage {
     fn drop(&mut self) {
-        self.destroy_handle()
+        if self.direction == Direction::Outgoing {
+            self.destroy_handle()
+        }
     }
 }
 
@@ -47,16 +51,70 @@ impl IotMessage {
     }
 
     /// Create an instance from an incoming C2D message
-    pub fn from_incoming_handle(_handle: IOTHUB_MESSAGE_HANDLE) -> Self {
-        todo!("implement with a C2D device twin example, since module twins are not supported for such a scenario.");
-        /*
-            // use IoTHubMessage_Get... functions to create a message instance
-            IoTHubMessage_GetMessageId(handle, "MSG_ID".);
-            IoTHubMessage_GetCorrelationId(handle, "CORE_ID");
-            IoTHubMessage_GetContentTypeSystemProperty
-            IoTHubMessage_GetContentEncodingSystemProperty
-            IoTHubMessage_GetProperty
-        */
+    pub fn from_incoming_handle(handle: IOTHUB_MESSAGE_HANDLE, property_keys: Vec<CString>) -> Self {
+        unsafe {
+            let mut buf_ptr: *const ::std::os::raw::c_uchar = std::ptr::null_mut();
+            let mut buf_size: usize = 0;
+            let mut system_properties = HashMap::new();
+            let mut properties: HashMap<CString, CString> = HashMap::new();
+            let body = match IoTHubMessage_GetByteArray(handle, &mut buf_ptr, &mut buf_size) {
+                IOTHUB_MESSAGE_RESULT_TAG_IOTHUB_MESSAGE_OK => {
+                    if buf_ptr.is_null() {
+                        error!("IoTHubMessage_GetByteArray: received invalid body pointer");
+                        Vec::new()
+                    } else {
+                        slice::from_raw_parts(buf_ptr, buf_size as usize).to_vec()
+                    }
+                }
+                _ => {
+                    error!("IoTHubMessage_GetByteArray: error while parsing body");
+                    Vec::new()
+                }
+            };
+
+            let id = IoTHubMessage_GetMessageId(handle);
+
+            if id.is_null() == false {
+                system_properties.insert("$.mid", CStr::from_ptr(id).to_owned());
+            }
+
+            let id = IoTHubMessage_GetCorrelationId(handle);
+
+            if id.is_null() == false {
+                system_properties.insert("$.cid", CStr::from_ptr(id).to_owned());
+            }
+
+            let id = IoTHubMessage_GetContentTypeSystemProperty(handle);
+
+            if id.is_null() == false {
+                system_properties.insert("$.ct", CStr::from_ptr(id).to_owned());
+            }
+
+            let id = IoTHubMessage_GetContentEncodingSystemProperty(handle);
+
+            if id.is_null() == false {
+                system_properties.insert("$.ce", CStr::from_ptr(id).to_owned());
+            }
+
+            for k in property_keys {
+                let v = IoTHubMessage_GetProperty(handle, k.as_ptr());
+
+                if v.is_null() {
+                    info!("IoTHubMessage_GetProperty: no value found for: {:?}", k);
+                } else {
+                    properties.insert(k, CStr::from_ptr(v).to_owned());
+                }
+            }
+
+            IotMessage {
+                handle: Some(handle),
+                body,
+                direction: Direction::Incoming,
+                output_queue: CString::new("output").unwrap(),
+                system_properties,
+                properties,
+            }
+        }
     }
 
     /// Create message handle
@@ -119,11 +177,6 @@ impl IotMessage {
         }
 
         Ok(self.handle.unwrap())
-    }
-
-    /// get name of output queue to be used with this message
-    pub fn get_output_queue(&self) -> CString {
-        self.output_queue.clone()
     }
 
     fn destroy_handle(&mut self) {
