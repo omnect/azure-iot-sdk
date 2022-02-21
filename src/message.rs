@@ -1,5 +1,5 @@
 use azure_iot_sdk_sys::*;
-use log::{info, error};
+use log::{error, info};
 use std::boxed::Box;
 use std::collections::HashMap;
 use std::error::Error;
@@ -51,7 +51,10 @@ impl IotMessage {
     }
 
     /// Create an instance from an incoming C2D message
-    pub fn from_incoming_handle(handle: IOTHUB_MESSAGE_HANDLE, property_keys: Vec<CString>) -> Self {
+    pub fn from_incoming_handle(
+        handle: IOTHUB_MESSAGE_HANDLE,
+        property_keys: Vec<CString>,
+    ) -> Self {
         unsafe {
             let mut buf_ptr: *const ::std::os::raw::c_uchar = std::ptr::null_mut();
             let mut buf_size: usize = 0;
@@ -72,29 +75,19 @@ impl IotMessage {
                 }
             };
 
-            let id = IoTHubMessage_GetMessageId(handle);
+            let mut add_system_property = |key, value: *const ::std::os::raw::c_char| {
+                if value.is_null() == false {
+                    system_properties.insert(key, CStr::from_ptr(value).to_owned());
+                }
+            };
 
-            if id.is_null() == false {
-                system_properties.insert("$.mid", CStr::from_ptr(id).to_owned());
-            }
-
-            let id = IoTHubMessage_GetCorrelationId(handle);
-
-            if id.is_null() == false {
-                system_properties.insert("$.cid", CStr::from_ptr(id).to_owned());
-            }
-
-            let id = IoTHubMessage_GetContentTypeSystemProperty(handle);
-
-            if id.is_null() == false {
-                system_properties.insert("$.ct", CStr::from_ptr(id).to_owned());
-            }
-
-            let id = IoTHubMessage_GetContentEncodingSystemProperty(handle);
-
-            if id.is_null() == false {
-                system_properties.insert("$.ce", CStr::from_ptr(id).to_owned());
-            }
+            add_system_property("$.mid", IoTHubMessage_GetMessageId(handle));
+            add_system_property("$.cid", IoTHubMessage_GetCorrelationId(handle));
+            add_system_property("$.ct", IoTHubMessage_GetContentTypeSystemProperty(handle));
+            add_system_property(
+                "$.ce",
+                IoTHubMessage_GetContentEncodingSystemProperty(handle),
+            );
 
             for k in property_keys {
                 let v = IoTHubMessage_GetProperty(handle, k.as_ptr());
