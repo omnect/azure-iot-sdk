@@ -13,7 +13,7 @@ use std::sync::Once;
 use std::time::{Duration, SystemTime};
 
 use crate::message::IotMessage;
-use crate::twin::Twin;
+use crate::twin::{Twin, TwinType};
 
 static mut IOTHUB_INIT_RESULT: i32 = -1;
 static IOTHUB_INIT_ONCE: Once = Once::new();
@@ -98,7 +98,15 @@ where
             SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)?
                 .saturating_add(Duration::from_secs(days_to_secs!(30))),
-        )?;
+        )
+        .map_err(|err| {
+            if let TwinType::Device = T::get_twin_type() {
+                error!("iot identity service failed to create device twin identity.
+                In case you use TPM attestation please note that this combination is currently not supported.");
+            }
+
+            err
+        })?;
 
         IotHubClient::from_connection_string(
             connection_info.connection_string.as_str(),

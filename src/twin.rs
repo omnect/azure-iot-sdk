@@ -9,8 +9,15 @@ pub struct DeviceTwin {
     handle: IOTHUB_DEVICE_CLIENT_LL_HANDLE,
 }
 
+pub enum TwinType {
+    Device,
+    Module,
+}
+
 pub trait Twin {
     fn new() -> Self;
+
+    fn get_twin_type() -> TwinType;
 
     fn create_from_connection_string(
         &mut self,
@@ -73,6 +80,10 @@ impl Twin for ModuleTwin {
         ModuleTwin {
             handle: std::ptr::null_mut(),
         }
+    }
+
+    fn get_twin_type() -> TwinType {
+        TwinType::Module
     }
 
     fn create_from_connection_string(
@@ -261,6 +272,10 @@ impl Twin for DeviceTwin {
         DeviceTwin {
             handle: std::ptr::null_mut(),
         }
+    }
+
+    fn get_twin_type() -> TwinType {
+        TwinType::Device
     }
 
     fn create_from_connection_string(
