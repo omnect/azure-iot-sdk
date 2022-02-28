@@ -1,3 +1,4 @@
+use crate::IotError;
 use azure_iot_sdk_sys::*;
 use log::{error, info};
 use std::boxed::Box;
@@ -111,9 +112,7 @@ impl IotMessage {
     }
 
     /// Create message handle
-    pub fn create_outgoing_handle(
-        &mut self,
-    ) -> Result<IOTHUB_MESSAGE_HANDLE, Box<dyn Error + Send + Sync>> {
+    pub fn create_outgoing_handle(&mut self) -> Result<IOTHUB_MESSAGE_HANDLE, IotError> {
         assert_eq!(self.direction, Direction::Outgoing);
 
         self.destroy_handle();

@@ -1,7 +1,9 @@
+use crate::IotError;
 use azure_iot_sdk_sys::*;
 use std::boxed::Box;
 use std::error::Error;
 use std::ffi::{c_void, CString};
+
 pub struct ModuleTwin {
     handle: IOTHUB_MODULE_CLIENT_LL_HANDLE,
 }
@@ -19,10 +21,8 @@ pub trait Twin {
 
     fn get_twin_type() -> TwinType;
 
-    fn create_from_connection_string(
-        &mut self,
-        connection_string: CString,
-    ) -> Result<(), Box<dyn Error + Send + Sync>>;
+    fn create_from_connection_string(&mut self, connection_string: CString)
+        -> Result<(), IotError>;
 
     fn do_work(&mut self);
 
@@ -34,7 +34,7 @@ pub trait Twin {
         queue: CString,
         callback: IOTHUB_CLIENT_EVENT_CONFIRMATION_CALLBACK,
         ctx: u32,
-    ) -> Result<(), Box<dyn Error + Send + Sync>>;
+    ) -> Result<(), IotError>;
 
     fn send_reported_state(
         &self,
@@ -42,37 +42,37 @@ pub trait Twin {
         size: usize,
         callback: IOTHUB_CLIENT_REPORTED_STATE_CALLBACK,
         ctx: *mut std::ffi::c_void,
-    ) -> Result<(), Box<dyn Error + Send + Sync>>;
+    ) -> Result<(), IotError>;
 
     fn set_connection_status_callback(
         &self,
         callback: IOTHUB_CLIENT_CONNECTION_STATUS_CALLBACK,
         ctx: *mut std::ffi::c_void,
-    ) -> Result<(), Box<dyn Error + Send + Sync>>;
+    ) -> Result<(), IotError>;
 
     fn set_input_message_callback(
         &self,
         callback: IOTHUB_CLIENT_MESSAGE_CALLBACK_ASYNC,
         ctx: *mut std::ffi::c_void,
-    ) -> Result<(), Box<dyn Error + Send + Sync>>;
+    ) -> Result<(), IotError>;
 
     fn set_twin_callback(
         &self,
         callback: IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK,
         ctx: *mut std::ffi::c_void,
-    ) -> Result<(), Box<dyn Error + Send + Sync>>;
+    ) -> Result<(), IotError>;
 
     fn get_twin_async(
         &self,
         callback: IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK,
         ctx: *mut std::ffi::c_void,
-    ) -> Result<(), Box<dyn Error + Send + Sync>>;
+    ) -> Result<(), IotError>;
 
     fn set_method_callback(
         &self,
         callback: IOTHUB_CLIENT_DEVICE_METHOD_CALLBACK_ASYNC,
         ctx: *mut std::ffi::c_void,
-    ) -> Result<(), Box<dyn Error + Send + Sync>>;
+    ) -> Result<(), IotError>;
 }
 
 impl Twin for ModuleTwin {
@@ -89,7 +89,7 @@ impl Twin for ModuleTwin {
     fn create_from_connection_string(
         &mut self,
         connection_string: CString,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> Result<(), IotError> {
         unsafe {
             self.handle = IoTHubModuleClient_LL_CreateFromConnectionString(
                 connection_string.into_raw(),
@@ -124,7 +124,7 @@ impl Twin for ModuleTwin {
         queue: CString,
         callback: IOTHUB_CLIENT_EVENT_CONFIRMATION_CALLBACK,
         ctx: u32,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> Result<(), IotError> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubModuleClient_LL_SendEventToOutputAsync(
@@ -150,7 +150,7 @@ impl Twin for ModuleTwin {
         size: usize,
         callback: IOTHUB_CLIENT_REPORTED_STATE_CALLBACK,
         ctx: *mut std::ffi::c_void,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> Result<(), IotError> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubModuleClient_LL_SendReportedState(
@@ -174,7 +174,7 @@ impl Twin for ModuleTwin {
         &self,
         callback: IOTHUB_CLIENT_CONNECTION_STATUS_CALLBACK,
         ctx: *mut std::ffi::c_void,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> Result<(), IotError> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubModuleClient_LL_SetConnectionStatusCallback(self.handle, callback, ctx)
@@ -192,7 +192,7 @@ impl Twin for ModuleTwin {
         &self,
         callback: IOTHUB_CLIENT_MESSAGE_CALLBACK_ASYNC,
         ctx: *mut std::ffi::c_void,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> Result<(), IotError> {
         unsafe {
             let input_name = CString::new("input").unwrap();
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
@@ -216,7 +216,7 @@ impl Twin for ModuleTwin {
         &self,
         callback: IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK,
         ctx: *mut std::ffi::c_void,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> Result<(), IotError> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubModuleClient_LL_SetModuleTwinCallback(self.handle, callback, ctx)
@@ -234,7 +234,7 @@ impl Twin for ModuleTwin {
         &self,
         callback: IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK,
         ctx: *mut std::ffi::c_void,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> Result<(), IotError> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubModuleClient_LL_GetTwinAsync(self.handle, callback, ctx)
@@ -252,7 +252,7 @@ impl Twin for ModuleTwin {
         &self,
         callback: IOTHUB_CLIENT_DEVICE_METHOD_CALLBACK_ASYNC,
         ctx: *mut std::ffi::c_void,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> Result<(), IotError> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubModuleClient_LL_SetModuleMethodCallback(self.handle, callback, ctx)
@@ -281,7 +281,7 @@ impl Twin for DeviceTwin {
     fn create_from_connection_string(
         &mut self,
         connection_string: CString,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> Result<(), IotError> {
         unsafe {
             self.handle = IoTHubDeviceClient_LL_CreateFromConnectionString(
                 connection_string.into_raw(),
@@ -315,7 +315,7 @@ impl Twin for DeviceTwin {
         _queue: CString,
         callback: IOTHUB_CLIENT_EVENT_CONFIRMATION_CALLBACK,
         ctx: u32,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> Result<(), IotError> {
         unsafe {
             let result = IoTHubDeviceClient_LL_SendEventAsync(
                 self.handle,
@@ -340,7 +340,7 @@ impl Twin for DeviceTwin {
         size: usize,
         callback: IOTHUB_CLIENT_REPORTED_STATE_CALLBACK,
         ctx: *mut std::ffi::c_void,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> Result<(), IotError> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubDeviceClient_LL_SendReportedState(
@@ -364,7 +364,7 @@ impl Twin for DeviceTwin {
         &self,
         callback: IOTHUB_CLIENT_CONNECTION_STATUS_CALLBACK,
         ctx: *mut std::ffi::c_void,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> Result<(), IotError> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubDeviceClient_LL_SetConnectionStatusCallback(self.handle, callback, ctx)
@@ -382,7 +382,7 @@ impl Twin for DeviceTwin {
         &self,
         callback: IOTHUB_CLIENT_MESSAGE_CALLBACK_ASYNC,
         ctx: *mut std::ffi::c_void,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> Result<(), IotError> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubDeviceClient_LL_SetMessageCallback(self.handle, callback, ctx)
@@ -400,7 +400,7 @@ impl Twin for DeviceTwin {
         &self,
         callback: IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK,
         ctx: *mut std::ffi::c_void,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> Result<(), IotError> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubDeviceClient_LL_SetDeviceTwinCallback(self.handle, callback, ctx)
@@ -418,7 +418,7 @@ impl Twin for DeviceTwin {
         &self,
         callback: IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK,
         ctx: *mut std::ffi::c_void,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> Result<(), IotError> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubDeviceClient_LL_GetTwinAsync(self.handle, callback, ctx)
@@ -436,7 +436,7 @@ impl Twin for DeviceTwin {
         &self,
         callback: IOTHUB_CLIENT_DEVICE_METHOD_CALLBACK_ASYNC,
         ctx: *mut std::ffi::c_void,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> Result<(), IotError> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubDeviceClient_LL_SetDeviceMethodCallback(self.handle, callback, ctx)
