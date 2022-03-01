@@ -50,7 +50,12 @@ pub type DirectMethod =
     Box<(dyn Fn(serde_json::Value) -> Result<Option<serde_json::Value>, IotError> + Send)>;
 
 pub trait EventHandler {
-    fn handle_connection_status(&self, _auth_status: AuthenticationStatus) {}
+    fn handle_connection_status(&self, auth_status: AuthenticationStatus) {
+        debug!(
+            "unhandled call to handle_connection_status(). status: {:?}",
+            auth_status
+        )
+    }
 
     fn handle_c2d_message(&self, message: IotMessage) -> Result<(), IotError> {
         debug!("unhandled call to handle_message(). message: {:?}", message);
@@ -58,7 +63,7 @@ pub trait EventHandler {
     }
 
     fn get_c2d_message_property_keys(&self) -> Vec<&'static str> {
-        Vec::new()
+        vec![]
     }
 
     fn handle_twin_desired(
