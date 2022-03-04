@@ -1,3 +1,6 @@
+use crate::message::IotMessage;
+use crate::twin::{Twin, TwinType};
+use crate::IotError;
 use azure_iot_sdk_sys::*;
 use core::slice;
 use eis_utils::*;
@@ -11,9 +14,6 @@ use std::mem;
 use std::str;
 use std::sync::Once;
 use std::time::{Duration, SystemTime};
-
-use crate::message::IotMessage;
-use crate::twin::{Twin, TwinType};
 
 static mut IOTHUB_INIT_RESULT: i32 = -1;
 static IOTHUB_INIT_ONCE: Once = Once::new();
@@ -46,28 +46,31 @@ pub enum AuthenticationStatus {
     Unauthenticated(UnauthenticatedReason),
 }
 
-pub type DirectMethod = Box<
-    (dyn Fn(serde_json::Value) -> Result<Option<serde_json::Value>, Box<dyn Error + Send + Sync>>
-         + Send),
->;
+pub type DirectMethod =
+    Box<(dyn Fn(serde_json::Value) -> Result<Option<serde_json::Value>, IotError> + Send)>;
 
 pub trait EventHandler {
-    fn handle_connection_status(&self, _auth_status: AuthenticationStatus) {}
+    fn handle_connection_status(&self, auth_status: AuthenticationStatus) {
+        debug!(
+            "unhandled call to handle_connection_status(). status: {:?}",
+            auth_status
+        )
+    }
 
-    fn handle_c2d_message(&self, message: IotMessage) -> Result<(), Box<dyn Error + Send + Sync>> {
+    fn handle_c2d_message(&self, message: IotMessage) -> Result<(), IotError> {
         debug!("unhandled call to handle_message(). message: {:?}", message);
         Ok(())
     }
 
     fn get_c2d_message_property_keys(&self) -> Vec<&'static str> {
-        Vec::new()
+        vec![]
     }
 
     fn handle_twin_desired(
         &self,
         state: TwinUpdateState,
         desired: serde_json::Value,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    ) -> Result<(), IotError> {
         debug!(
             "unhandled call to handle_twin_desired(). state: {:?} twin: {}",
             state,
@@ -93,7 +96,7 @@ where
 {
     pub fn from_identity_service(
         event_handler: impl EventHandler + 'static,
-    ) -> Result<Box<Self>, Box<dyn Error + Send + Sync>> {
+    ) -> Result<Box<Self>, IotError> {
         let connection_info = request_connection_string_from_eis_with_expiry(
             SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)?
@@ -117,7 +120,7 @@ where
     pub fn from_connection_string(
         connection_string: &str,
         event_handler: impl EventHandler + 'static,
-    ) -> Result<Box<Self>, Box<dyn Error + Send + Sync>> {
+    ) -> Result<Box<Self>, IotError> {
         IotHubClient::<T>::iothub_init()?;
 
         let mut twin: T = T::new();
@@ -134,10 +137,7 @@ where
         Ok(client)
     }
 
-    pub fn send_d2c_message(
-        &mut self,
-        mut message: IotMessage,
-    ) -> Result<u32, Box<dyn Error + Send + Sync>> {
+    pub fn send_d2c_message(&mut self, mut message: IotMessage) -> Result<u32, IotError> {
         let handle = message.create_outgoing_handle()?;
         let queue = message.output_queue.clone();
         let ctx = rand::thread_rng().gen::<u32>();
@@ -154,10 +154,7 @@ where
         Ok(ctx)
     }
 
-    pub fn send_reported_state(
-        &mut self,
-        reported: serde_json::Value,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub fn send_reported_state(&mut self, reported: serde_json::Value) -> Result<(), IotError> {
         debug!("send reported: {}", reported.to_string());
 
         let reported_state = CString::new(reported.to_string()).unwrap();
@@ -176,7 +173,7 @@ where
         self.twin.do_work()
     }
 
-    fn iothub_init() -> Result<(), Box<dyn Error + Send + Sync>> {
+    fn iothub_init() -> Result<(), IotError> {
         unsafe {
             IOTHUB_INIT_ONCE.call_once(|| {
                 IOTHUB_INIT_RESULT = IoTHub_Init();
@@ -191,7 +188,7 @@ where
         }
     }
 
-    fn set_callbacks(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    fn set_callbacks(&mut self) -> Result<(), IotError> {
         let ctx = self as *mut IotHubClient<T> as *mut c_void;
 
         self.twin.set_connection_status_callback(
@@ -378,7 +375,7 @@ where
                 Result::Err(e) => error!("error: {}", e),
             }
         } else {
-            error!("method not implemented")
+            error!("method not implemented: {}", method_name)
         }
 
         METHOD_RESPONSE_ERROR
