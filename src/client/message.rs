@@ -1,4 +1,4 @@
-//! Let's you create either create D2C messages or parse C2D messages.
+//! Let's you create either a D2C messages or parse a C2D messages.
 use crate::client::IotError;
 use azure_iot_sdk_sys::*;
 use log::{error, info};
