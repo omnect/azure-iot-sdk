@@ -1,26 +1,29 @@
-use crate::IotError;
+use crate::client::IotError;
 use azure_iot_sdk_sys::*;
 use std::boxed::Box;
 use std::error::Error;
 use std::ffi::{c_void, CString};
 
+#[derive(Default, Debug)]
 pub struct ModuleTwin {
-    handle: IOTHUB_MODULE_CLIENT_LL_HANDLE,
-}
-pub struct DeviceTwin {
-    handle: IOTHUB_DEVICE_CLIENT_LL_HANDLE,
+    pub handle: Option<IOTHUB_MODULE_CLIENT_LL_HANDLE>,
 }
 
+#[derive(Default, Debug)]
+pub struct DeviceTwin {
+    pub handle: Option<IOTHUB_DEVICE_CLIENT_LL_HANDLE>,
+}
+
+/// type of client twin
+#[derive(Debug)]
 pub enum TwinType {
-    Device,
+    /// module twin client
     Module,
+    /// device twin client
+    Device,
 }
 
 pub trait Twin {
-    fn new() -> Self;
-
-    fn get_twin_type() -> TwinType;
-
     fn create_from_connection_string(&mut self, connection_string: CString)
         -> Result<(), IotError>;
 
@@ -76,31 +79,23 @@ pub trait Twin {
 }
 
 impl Twin for ModuleTwin {
-    fn new() -> Self {
-        ModuleTwin {
-            handle: std::ptr::null_mut(),
-        }
-    }
-
-    fn get_twin_type() -> TwinType {
-        TwinType::Module
-    }
-
     fn create_from_connection_string(
         &mut self,
         connection_string: CString,
     ) -> Result<(), IotError> {
         unsafe {
-            self.handle = IoTHubModuleClient_LL_CreateFromConnectionString(
+            let handle = IoTHubModuleClient_LL_CreateFromConnectionString(
                 connection_string.into_raw(),
                 Some(MQTT_Protocol),
             );
 
-            if self.handle.is_null() {
+            if handle.is_null() {
                 return Err(Box::<dyn Error + Send + Sync>::from(
                     "error while calling IoTHubModuleClient_LL_CreateFromConnectionString()",
                 ));
             }
+
+            self.handle = Some(handle);
 
             Ok(())
         }
@@ -108,13 +103,13 @@ impl Twin for ModuleTwin {
 
     fn do_work(&mut self) {
         unsafe {
-            IoTHubModuleClient_LL_DoWork(self.handle);
+            IoTHubModuleClient_LL_DoWork(self.handle.unwrap());
         }
     }
 
     fn destroy(&mut self) {
         unsafe {
-            IoTHubModuleClient_LL_Destroy(self.handle);
+            IoTHubModuleClient_LL_Destroy(self.handle.unwrap());
         }
     }
 
@@ -128,7 +123,7 @@ impl Twin for ModuleTwin {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubModuleClient_LL_SendEventToOutputAsync(
-                    self.handle,
+                    self.handle.unwrap(),
                     message_handle,
                     queue.as_ptr(),
                     callback,
@@ -154,7 +149,7 @@ impl Twin for ModuleTwin {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubModuleClient_LL_SendReportedState(
-                    self.handle,
+                    self.handle.unwrap(),
                     reported_state.into_raw() as *mut u8,
                     size,
                     callback,
@@ -177,7 +172,11 @@ impl Twin for ModuleTwin {
     ) -> Result<(), IotError> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
-                != IoTHubModuleClient_LL_SetConnectionStatusCallback(self.handle, callback, ctx)
+                != IoTHubModuleClient_LL_SetConnectionStatusCallback(
+                    self.handle.unwrap(),
+                    callback,
+                    ctx,
+                )
             {
                 return Err(Box::<dyn Error + Send + Sync>::from(
                     "error while calling IoTHubModuleClient_LL_SetConnectionStatusCallback()",
@@ -197,7 +196,7 @@ impl Twin for ModuleTwin {
             let input_name = CString::new("input").unwrap();
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubModuleClient_LL_SetInputMessageCallback(
-                    self.handle,
+                    self.handle.unwrap(),
                     input_name.as_ptr(),
                     callback,
                     ctx,
@@ -219,7 +218,7 @@ impl Twin for ModuleTwin {
     ) -> Result<(), IotError> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
-                != IoTHubModuleClient_LL_SetModuleTwinCallback(self.handle, callback, ctx)
+                != IoTHubModuleClient_LL_SetModuleTwinCallback(self.handle.unwrap(), callback, ctx)
             {
                 return Err(Box::<dyn Error + Send + Sync>::from(
                     "error while calling IoTHubModuleClient_LL_SetModuleTwinCallback()",
@@ -237,7 +236,7 @@ impl Twin for ModuleTwin {
     ) -> Result<(), IotError> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
-                != IoTHubModuleClient_LL_GetTwinAsync(self.handle, callback, ctx)
+                != IoTHubModuleClient_LL_GetTwinAsync(self.handle.unwrap(), callback, ctx)
             {
                 return Err(Box::<dyn Error + Send + Sync>::from(
                     "error while calling IoTHubModuleClient_LL_GetTwinAsync()",
@@ -255,7 +254,11 @@ impl Twin for ModuleTwin {
     ) -> Result<(), IotError> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
-                != IoTHubModuleClient_LL_SetModuleMethodCallback(self.handle, callback, ctx)
+                != IoTHubModuleClient_LL_SetModuleMethodCallback(
+                    self.handle.unwrap(),
+                    callback,
+                    ctx,
+                )
             {
                 return Err(Box::<dyn Error + Send + Sync>::from(
                     "error while calling IoTHubModuleClient_LL_SetModuleMethodCallback()",
@@ -268,44 +271,37 @@ impl Twin for ModuleTwin {
 }
 
 impl Twin for DeviceTwin {
-    fn new() -> Self {
-        DeviceTwin {
-            handle: std::ptr::null_mut(),
-        }
-    }
-
-    fn get_twin_type() -> TwinType {
-        TwinType::Device
-    }
-
     fn create_from_connection_string(
         &mut self,
         connection_string: CString,
     ) -> Result<(), IotError> {
         unsafe {
-            self.handle = IoTHubDeviceClient_LL_CreateFromConnectionString(
+            let handle = IoTHubDeviceClient_LL_CreateFromConnectionString(
                 connection_string.into_raw(),
                 Some(MQTT_Protocol),
             );
 
-            if self.handle.is_null() {
+            if handle.is_null() {
                 return Err(Box::<dyn Error + Send + Sync>::from(
                     "error while calling IoTHubDeviceClient_LL_CreateFromConnectionString()",
                 ));
             }
+
+            self.handle = Some(handle);
+
             Ok(())
         }
     }
 
     fn do_work(&mut self) {
         unsafe {
-            IoTHubDeviceClient_LL_DoWork(self.handle);
+            IoTHubDeviceClient_LL_DoWork(self.handle.unwrap());
         }
     }
 
     fn destroy(&mut self) {
         unsafe {
-            IoTHubDeviceClient_LL_Destroy(self.handle);
+            IoTHubDeviceClient_LL_Destroy(self.handle.unwrap());
         }
     }
 
@@ -318,7 +314,7 @@ impl Twin for DeviceTwin {
     ) -> Result<(), IotError> {
         unsafe {
             let result = IoTHubDeviceClient_LL_SendEventAsync(
-                self.handle,
+                self.handle.unwrap(),
                 message_handle,
                 callback,
                 ctx as *mut c_void,
@@ -344,7 +340,7 @@ impl Twin for DeviceTwin {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubDeviceClient_LL_SendReportedState(
-                    self.handle,
+                    self.handle.unwrap(),
                     reported_state.into_raw() as *mut u8,
                     size,
                     callback,
@@ -367,7 +363,11 @@ impl Twin for DeviceTwin {
     ) -> Result<(), IotError> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
-                != IoTHubDeviceClient_LL_SetConnectionStatusCallback(self.handle, callback, ctx)
+                != IoTHubDeviceClient_LL_SetConnectionStatusCallback(
+                    self.handle.unwrap(),
+                    callback,
+                    ctx,
+                )
             {
                 return Err(Box::<dyn Error + Send + Sync>::from(
                     "error while calling IoTHubDeviceClient_LL_SetConnectionStatusCallback()",
@@ -385,7 +385,7 @@ impl Twin for DeviceTwin {
     ) -> Result<(), IotError> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
-                != IoTHubDeviceClient_LL_SetMessageCallback(self.handle, callback, ctx)
+                != IoTHubDeviceClient_LL_SetMessageCallback(self.handle.unwrap(), callback, ctx)
             {
                 return Err(Box::<dyn Error + Send + Sync>::from(
                     "error while calling IoTHubDeviceClient_LL_SetMessageCallback()",
@@ -403,7 +403,7 @@ impl Twin for DeviceTwin {
     ) -> Result<(), IotError> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
-                != IoTHubDeviceClient_LL_SetDeviceTwinCallback(self.handle, callback, ctx)
+                != IoTHubDeviceClient_LL_SetDeviceTwinCallback(self.handle.unwrap(), callback, ctx)
             {
                 return Err(Box::<dyn Error + Send + Sync>::from(
                     "error while calling IoTHubDeviceClient_LL_SetDeviceTwinCallback()",
@@ -421,7 +421,7 @@ impl Twin for DeviceTwin {
     ) -> Result<(), IotError> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
-                != IoTHubDeviceClient_LL_GetTwinAsync(self.handle, callback, ctx)
+                != IoTHubDeviceClient_LL_GetTwinAsync(self.handle.unwrap(), callback, ctx)
             {
                 return Err(Box::<dyn Error + Send + Sync>::from(
                     "error while calling IoTHubDeviceClient_LL_GetTwinAsync()",
@@ -439,7 +439,11 @@ impl Twin for DeviceTwin {
     ) -> Result<(), IotError> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
-                != IoTHubDeviceClient_LL_SetDeviceMethodCallback(self.handle, callback, ctx)
+                != IoTHubDeviceClient_LL_SetDeviceMethodCallback(
+                    self.handle.unwrap(),
+                    callback,
+                    ctx,
+                )
             {
                 return Err(Box::<dyn Error + Send + Sync>::from(
                     "error while calling IoTHubDeviceClient_LL_SetDeviceMethodCallback()",

@@ -1,6 +1,10 @@
 # azure-iot-sdk
 
-This repository provides a wrapper of the rust unsafe bindings for the azure-iot-sdk from [azure-iot-sdk-sys](https://github.com/ICS-DeviceManagement/azure-iot-sdk-sys.git).
+This repository provides an object oriented wrapper of the rust unsafe bindings for the azure-iot-sdk from [azure-iot-sdk-sys](https://github.com/ICS-DeviceManagement/azure-iot-sdk-sys.git).
+
+A reference implementaion showing how this framework might be used can be found [here](https://github.com/ICS-DeviceManagement/iot-client-template-rs).
+
+The rustdoc documentation of the SDK can be found [here](doc/azure_iot_sdk/index.html).
 
 # License
 

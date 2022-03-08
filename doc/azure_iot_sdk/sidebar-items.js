@@ -1,0 +1,1 @@
+initSidebarItems({"mod":[["client","iothub client Let’s you create an instance of [`Self::IotHubClient`] with integrated [`Self::EventHandler`]."]]});

@@ -1,4 +1,5 @@
-use crate::IotError;
+//! Let's you create either create D2C messages or parse C2D messages.
+use crate::client::IotError;
 use azure_iot_sdk_sys::*;
 use log::{error, info};
 use std::boxed::Box;
@@ -8,9 +9,12 @@ use std::ffi::CStr;
 use std::ffi::CString;
 use std::slice;
 
+/// message direction
 #[derive(Debug, PartialEq)]
 pub enum Direction {
+    /// incoming C2D message
     Incoming,
+    /// outgoing D2C message
     Outgoing,
 }
 
@@ -20,14 +24,48 @@ impl Default for Direction {
     }
 }
 
-/// message either representing incoming C2D message or an outgoing D2C message
+/// message instance. either representing incoming C2D message or an outgoing D2C message
+/// ```rust
+/// use azure_iot_sdk::client::*;
+/// struct MyEventHandler {}
+/// impl EventHandler for MyEventHandler {}
+///
+/// fn main() {
+///     let event_handler = MyEventHandler{};
+///     let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+/// 
+///     let msg = IotMessage::builder()
+///         .set_body(
+///             serde_json::to_vec(r#"{"my telemetry message": "hi from device"}"#).unwrap(),
+///         )
+///         .set_id(String::from("my msg id"))
+///         .set_correlation_id(String::from("my correleation id"))
+///         .set_property(
+///             String::from("my property key"),
+///             String::from("my property value"),
+///         )
+///         .set_output_queue(String::from("my output queue"))
+///         .build();
+/// 
+///     client.send_d2c_message(msg).unwrap();
+///
+///     loop {
+///         client.do_work();
+///     }
+/// }
+/// ```
 #[derive(Default, Debug)]
 pub struct IotMessage {
     handle: Option<IOTHUB_MESSAGE_HANDLE>,
+    /// message body
     pub body: Vec<u8>,
+    /// output queue name. default: "output"
     pub output_queue: CString,
+    /// message direction
     pub direction: Direction,
+    /// map of [mqtt message properties](https://docs.microsoft.com/de-de/azure/iot-hub/iot-c-sdk-ref/iothub-message-h/iothubmessage-getproperty)
     pub properties: HashMap<CString, CString>,
+    /// map of [mqtt system message properties](https://docs.microsoft.com/de-de/azure/iot-hub/iot-c-sdk-ref/iothub-message-h/iothubmessage-getcontenttypesystemproperty)
     pub system_properties: HashMap<&'static str, CString>,
 }
 
@@ -51,8 +89,7 @@ impl IotMessage {
         }
     }
 
-    /// Create an instance from an incoming C2D message
-    pub fn from_incoming_handle(
+    pub(crate) fn from_incoming_handle(
         handle: IOTHUB_MESSAGE_HANDLE,
         property_keys: Vec<CString>,
     ) -> Self {
@@ -111,8 +148,7 @@ impl IotMessage {
         }
     }
 
-    /// Create message handle
-    pub fn create_outgoing_handle(&mut self) -> Result<IOTHUB_MESSAGE_HANDLE, IotError> {
+    pub(crate) fn create_outgoing_handle(&mut self) -> Result<IOTHUB_MESSAGE_HANDLE, IotError> {
         assert_eq!(self.direction, Direction::Outgoing);
 
         self.destroy_handle();
