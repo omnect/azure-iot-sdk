@@ -4,7 +4,7 @@ This repository provides an object oriented wrapper of the rust unsafe bindings 
 
 A reference implementaion showing how this framework might be used can be found [here](https://github.com/ICS-DeviceManagement/iot-client-template-rs).
 
-The rustdoc documentation of the SDK can be found [here](doc/azure_iot_sdk/index.html).
+The rustdoc documentation of the SDK can be found [here](https://htmlpreview.github.io/?/doc/azure_iot_sdk/index.html).
 
 # License
 
