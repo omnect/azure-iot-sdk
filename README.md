@@ -11,9 +11,9 @@ If you intend to build the SDK locally the paths to the libraries listed below m
 - export LIB_PATH_OPENSSL=<path to openssl >
 - export LIB_PATH_CURL=<path to curl>
 
-**We intend to provide these dependencies asap.**
+**We intend to provide these dependencies as public conan packages soon.**
 
-## Genrate documetation
+## Generate documentation
 The rustdoc documentation of the SDK is not published yet but can be locally created by `cargo doc --lib --no-deps --open`.
 
 # License
