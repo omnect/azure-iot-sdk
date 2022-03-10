@@ -2,9 +2,19 @@
 
 This repository provides an object oriented wrapper of the rust unsafe bindings for the azure-iot-sdk from [azure-iot-sdk-sys](https://github.com/ICS-DeviceManagement/azure-iot-sdk-sys.git).
 
-A reference implementaion showing how this framework might be used can be found [here](https://github.com/ICS-DeviceManagement/iot-client-template-rs).
+A reference implementation showing how this framework might be used can be found [here](https://github.com/ICS-DeviceManagement/iot-client-template-rs).
 
-The rustdoc documentation of the SDK can be found [here](https://htmlpreview.github.io/?/doc/azure_iot_sdk/index.html).
+## Build SDK
+If you intend to build the SDK locally the paths to the libraries listed below must be exported.
+- export LIB_PATH_AZURESDK=<path to the azure iot sdk c >
+- export LIB_PATH_UUID=<path to uid >
+- export LIB_PATH_OPENSSL=<path to openssl >
+- export LIB_PATH_CURL=<path to curl>
+
+**We intend to provide these dependencies asap.**
+
+## Genrate documetation
+The rustdoc documentation of the SDK is not published yet but can be locally created by `cargo doc --lib --no-deps --open`.
 
 # License
 

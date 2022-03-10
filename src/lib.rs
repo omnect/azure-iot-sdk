@@ -19,8 +19,8 @@
 //!     - receive desired properties
 //!     - send reported properties
 //! - [direct methods](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-devguide-direct-methods)
-//! - [Device2Cloud (D2C) messages](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-devguide-messages-d2c)
-//! - [Cloud2Device (C2D) messages](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-devguide-messages-c2d)
+//! - [device to cloud (D2C) messages](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-devguide-messages-d2c)
+//! - [cloud to device (C2D) messages](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-devguide-messages-c2d)
 
 /// iothub client
 pub mod client;

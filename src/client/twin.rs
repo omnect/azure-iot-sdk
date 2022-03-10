@@ -6,12 +6,12 @@ use std::ffi::{c_void, CString};
 
 #[derive(Default, Debug)]
 pub struct ModuleTwin {
-    pub handle: Option<IOTHUB_MODULE_CLIENT_LL_HANDLE>,
+    handle: Option<IOTHUB_MODULE_CLIENT_LL_HANDLE>,
 }
 
 #[derive(Default, Debug)]
 pub struct DeviceTwin {
-    pub handle: Option<IOTHUB_DEVICE_CLIENT_LL_HANDLE>,
+    handle: Option<IOTHUB_DEVICE_CLIENT_LL_HANDLE>,
 }
 
 /// type of client twin

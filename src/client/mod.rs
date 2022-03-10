@@ -1,5 +1,5 @@
 //! Let's you create an instance of [`Self::IotHubClient`] with integrated [`Self::EventHandler`].
-pub use self::message::{Direction, IotMessage};
+pub use self::message::{Direction, IotMessage, IotMessageBuilder};
 pub use self::twin::TwinType;
 use self::twin::{DeviceTwin, ModuleTwin, Twin};
 use azure_iot_sdk_sys::*;
@@ -19,7 +19,7 @@ use std::time::{Duration, SystemTime};
 /// crate wide shortcut for error type
 pub type IotError = Box<dyn Error + Send + Sync>;
 
-/// iothub C2D and D2c messages
+/// iothub cloud to device (C2D) and device to cloud (D2C) messages
 mod message;
 /// twin implementation, ether device or module twin
 mod twin;
@@ -69,29 +69,12 @@ pub enum AuthenticationStatus {
 }
 
 /// function signature definition for a direct method implementation
-/// ```rust
+/// ```no_run
+/// # use azure_iot_sdk::client::*;
+/// # use serde_json::json;
+/// #
 /// fn mirror_func_params_as_result(
-/// in_json: serde_json::Value,
-/// ) -> Result<Option<serde_json::Value>, IotError> {
-///     let out_json = json!({
-///         "called function": "func_params_as_result",
-///         "your param was": in_json
-///     });
-///     Ok(Some(out_json))
-/// }
-///
-/// fn main() {
-///     let _dm1: DirectMethod = Box::new(mirror_func_params_as_result);
-///     let _dm2: IotHubClient::make_direct_method(move |_in_json| Ok(None));
-/// }
-/// ```
-pub type DirectMethod =
-    Box<(dyn Fn(serde_json::Value) -> Result<Option<serde_json::Value>, IotError> + Send)>;
-
-/// hash map signature definition for a direct method map implementation
-/// ```rust
-/// fn mirror_func_params_as_result(
-/// in_json: serde_json::Value,
+///     in_json: serde_json::Value,
 /// ) -> Result<Option<serde_json::Value>, IotError> {
 ///     let out_json = json!({
 ///         "called function": "func_params_as_result",
@@ -103,9 +86,32 @@ pub type DirectMethod =
 /// fn main() {
 ///     let dm1 = Box::new(mirror_func_params_as_result);
 ///     let dm2 = IotHubClient::make_direct_method(move |_in_json| Ok(None));
-/// 
+/// }
+/// ```
+pub type DirectMethod =
+    Box<(dyn Fn(serde_json::Value) -> Result<Option<serde_json::Value>, IotError> + Send)>;
+
+/// hash map signature definition for a direct method map implementation
+/// ```no_run
+/// # use azure_iot_sdk::client::*;
+/// # use serde_json::json;
+/// #
+/// fn mirror_func_params_as_result(
+///     in_json: serde_json::Value,
+/// ) -> Result<Option<serde_json::Value>, IotError> {
+///     let out_json = json!({
+///         "called function": "func_params_as_result",
+///         "your param was": in_json
+///     });
+///     Ok(Some(out_json))
+/// }
+///
+/// fn main() {
+///     let dm1 = Box::new(mirror_func_params_as_result);
+///     let dm2 = IotHubClient::make_direct_method(move |_in_json| Ok(None));
+///
 ///     let mut dmm = DirectMethodMap::new();
-/// 
+///
 ///     dmm.insert(String::from("mirror_func_params_as_result"), dm1);
 ///     dmm.insert(String::from("closure"), dm2);
 /// }
@@ -113,41 +119,44 @@ pub type DirectMethod =
 pub type DirectMethodMap = HashMap<String, DirectMethod>;
 
 /// Trait to be implemented by client implementations in order to handle iothub events
-///  ```rust
-///struct MyEventHandler {}
+///  ```no_run
+/// # use azure_iot_sdk::client::*;
+/// # use log::debug;
+/// #
+/// struct MyEventHandler {}
 ///
-///impl EventHandler for MyEventHandler {
-///    fn handle_connection_status(&self, auth_status: AuthenticationStatus) {
-///        debug!("{:?}", auth_status)
-///    }
+/// impl EventHandler for MyEventHandler {
+///     fn handle_connection_status(&self, auth_status: AuthenticationStatus) {
+///         debug!("{:?}", auth_status)
+///     }
 ///
-///    fn handle_c2d_message(&self, message: IotMessage) -> Result<(), IotError> {
-///        debug!("{:?}", message);
-///        Ok(())
-///    }
+///     fn handle_c2d_message(&self, message: IotMessage) -> Result<(), IotError> {
+///         debug!("{:?}", message);
+///         Ok(())
+///     }
 ///
-///    fn get_c2d_message_property_keys(&self) -> Vec<&'static str> {
-///        debug!("get message properties called");
-///        vec![]
-///    }
+///     fn get_c2d_message_property_keys(&self) -> Vec<&'static str> {
+///         debug!("get message properties called");
+///         vec![]
+///     }
 ///
-///    fn handle_twin_desired(
-///        &self,
-///        state: TwinUpdateState,
-///        desired: serde_json::Value,
-///    ) -> Result<(), IotError> {
-///        debug!("{:?}, {:?}", state, desired);
-///        Ok(())
-///    }
+///     fn handle_twin_desired(
+///         &self,
+///         state: TwinUpdateState,
+///         desired: serde_json::Value,
+///     ) -> Result<(), IotError> {
+///         debug!("{:?}, {:?}", state, desired);
+///         Ok(())
+///     }
 ///
-///    fn get_direct_methods(&self) -> Option<&DirectMethodMap> {
-///        debug!("get direct methods called");
-///        None
-///    }
-///}
+///     fn get_direct_methods(&self) -> Option<&DirectMethodMap> {
+///         debug!("get direct methods called");
+///         None
+///     }
+/// }
 /// ```
 pub trait EventHandler {
-    /// gets called as a result of callig [`IotHubClient::from_identity_service()`] or
+    /// gets called as a result of calling [`IotHubClient::from_identity_service()`] or
     /// [`IotHubClient::from_connection_string()`]
     fn handle_connection_status(&self, auth_status: AuthenticationStatus) {
         debug!(
@@ -191,10 +200,11 @@ pub trait EventHandler {
 }
 
 /// iothub client to be instantiated in order to initiate iothub communication
-/// ```rust
-/// use azure_iot_sdk::client::*;
-/// use log::debug;
-///
+/// ```no_run
+/// # use azure_iot_sdk::client::*;
+/// # use log::debug;
+/// # use std::{thread, time};
+/// #
 /// struct MyEventHandler {}
 ///
 /// impl EventHandler for MyEventHandler {
@@ -233,6 +243,7 @@ pub trait EventHandler {
 ///
 ///     loop {
 ///         client.do_work();
+///         thread::sleep(time::Duration::from_millis(100));
 ///     }
 /// }
 /// ```
@@ -244,6 +255,14 @@ pub struct IotHubClient {
 impl IotHubClient {
     /// call this function in order to create an instance of [`IotHubClient`] by using iot-identity-service.
     /// ***Note***: this feature is currently [not supported for all combinations of identity type and authentication mechanism](https://azure.github.io/iot-identity-service/develop-an-agent.html#connecting-your-agent-to-iot-hub).
+    /// ```rust, no_run
+    /// # use azure_iot_sdk::client::*;
+    /// # struct MyEventHandler {}
+    /// # impl EventHandler for MyEventHandler {}
+    /// #
+    /// let event_handler = MyEventHandler{};
+    /// let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+    /// ```
     pub fn from_identity_service(
         twin_type: TwinType,
         event_handler: impl EventHandler + 'static,
@@ -270,6 +289,15 @@ impl IotHubClient {
     }
 
     /// call this function in order to create an instance of [`IotHubClient`] by using a connection string.
+    /// ```rust, no_run
+    /// # use azure_iot_sdk::client::*;
+    /// # struct MyEventHandler {}
+    /// # impl EventHandler for MyEventHandler {}
+    /// #
+    /// let event_handler = MyEventHandler{};
+    /// let con_str = "HostName=my-iothub.azure-devices.net;DeviceId=my-dev-id;SharedAccessKey=my-sas-key=";
+    /// let mut client = IotHubClient::from_connection_string(TwinType::Module, con_str, event_handler).unwrap();
+    /// ```
     pub fn from_connection_string(
         twin_type: TwinType,
         connection_string: &str,
@@ -278,12 +306,8 @@ impl IotHubClient {
         IotHubClient::iothub_init()?;
 
         let mut twin: Box<dyn Twin> = match twin_type {
-            TwinType::Module => Box::new(ModuleTwin {
-                ..Default::default()
-            }),
-            TwinType::Device => Box::new(DeviceTwin {
-                ..Default::default()
-            }),
+            TwinType::Module => Box::new(ModuleTwin::default()),
+            TwinType::Device => Box::new(DeviceTwin::default()),
         };
 
         twin.create_from_connection_string(CString::new(connection_string)?)?;
@@ -298,7 +322,31 @@ impl IotHubClient {
         Ok(client)
     }
 
-    /// call this function in order to send a message to iothub.
+    /// Let's you either create an outgoing D2C messages or parse an incoming cloud to device (C2D) messages.
+    /// ```rust, no_run
+    /// # use azure_iot_sdk::client::*;
+    /// # struct MyEventHandler {}
+    /// # impl EventHandler for MyEventHandler {}
+    /// #
+    /// #
+    /// # let event_handler = MyEventHandler{};
+    /// # let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+    /// #
+    /// let msg = IotMessage::builder()
+    ///     .set_body(
+    ///         serde_json::to_vec(r#"{"my telemetry message": "hi from device"}"#).unwrap(),
+    ///     )
+    ///     .set_id(String::from("my msg id"))
+    ///     .set_correlation_id(String::from("my correleation id"))
+    ///     .set_property(
+    ///         String::from("my property key"),
+    ///         String::from("my property value"),
+    ///     )
+    ///     .set_output_queue(String::from("my output queue"))
+    ///     .build();
+    ///
+    /// client.send_d2c_message(msg);
+    /// ```
     pub fn send_d2c_message(&mut self, mut message: IotMessage) -> Result<u32, IotError> {
         let handle = message.create_outgoing_handle()?;
         let queue = message.output_queue.clone();
@@ -317,6 +365,25 @@ impl IotHubClient {
     }
 
     /// call this function in order to send a reported state update to iothub.
+    /// ```rust, no_run
+    /// # use azure_iot_sdk::client::*;
+    /// # use serde_json::json;
+    /// # struct MyEventHandler {}
+    /// # impl EventHandler for MyEventHandler {}
+    /// #
+    /// #
+    /// # let event_handler = MyEventHandler{};
+    /// # let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+    /// #
+    /// let reported = json!({
+    ///     "my_status": {
+    ///         "status": "ok",
+    ///         "timestamp": "2022-03-10",
+    ///     }
+    /// });
+    ///
+    /// client.send_reported_state(reported);
+    /// ```
     pub fn send_reported_state(&mut self, reported: serde_json::Value) -> Result<(), IotError> {
         debug!("send reported: {}", reported.to_string());
 
@@ -332,13 +399,37 @@ impl IotHubClient {
         )
     }
 
-    /// call this function periodically in order to trigger message computation
+    /// call this function periodically in order to trigger message computation,
     /// when work (sending/receiving) can be done by the client.
+    /// [Microsoft recommends an interval of 100ms](https://docs.microsoft.com/en-us/azure/iot-hub/iot-c-sdk-ref/iothub-device-client-ll-h/iothubdeviceclient-ll-dowork)
+    /// ```rust, no_run
+    /// # use azure_iot_sdk::client::*;
+    /// # use std::{thread, time};
+    /// # struct MyEventHandler {}
+    /// # impl EventHandler for MyEventHandler {}
+    /// #
+    /// # let event_handler = MyEventHandler{};
+    /// # let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+    /// #
+    /// loop {
+    ///     client.do_work();
+    ///     thread::sleep(time::Duration::from_millis(100));
+    /// }
+    /// ```
     pub fn do_work(&mut self) {
         self.twin.do_work()
     }
 
     /// creates a [`DirectMethod`] from a closure
+    /// ```no_run
+    /// # use azure_iot_sdk::client::*;
+    /// # use serde_json::json;
+    /// #
+    /// let mut dmm = DirectMethodMap::new();
+    /// let dm = IotHubClient::make_direct_method(move |_in_json| Ok(None));
+    ///
+    /// dmm.insert(String::from("closure"), dm);
+    /// ```
     pub fn make_direct_method<'a, F>(f: F) -> DirectMethod
     where
         F: Fn(serde_json::Value) -> Result<Option<serde_json::Value>, IotError> + 'static + Send,

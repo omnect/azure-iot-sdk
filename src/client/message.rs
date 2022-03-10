@@ -1,4 +1,3 @@
-//! Let's you create either a D2C messages or parse a C2D messages.
 use crate::client::IotError;
 use azure_iot_sdk_sys::*;
 use log::{error, info};
@@ -12,9 +11,9 @@ use std::slice;
 /// message direction
 #[derive(Debug, PartialEq)]
 pub enum Direction {
-    /// incoming C2D message
+    /// incoming cloud to device (C2D) message
     Incoming,
-    /// outgoing D2C message
+    /// outgoing device to cloud (D2C) message
     Outgoing,
 }
 
@@ -23,36 +22,30 @@ impl Default for Direction {
         Direction::Outgoing
     }
 }
-
-/// message instance. either representing incoming C2D message or an outgoing D2C message
-/// ```rust
-/// use azure_iot_sdk::client::*;
-/// struct MyEventHandler {}
-/// impl EventHandler for MyEventHandler {}
-///
-/// fn main() {
-///     let event_handler = MyEventHandler{};
-///     let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+/// Let's you either create an outgoing D2C messages or parse an incoming cloud to device (C2D) messages.
+/// ```rust, no_run
+/// # use azure_iot_sdk::client::*;
+/// # struct MyEventHandler {}
+/// # impl EventHandler for MyEventHandler {}
+/// #
+/// #
+/// # let event_handler = MyEventHandler{};
+/// # let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+/// #
+/// let msg = IotMessage::builder()
+///     .set_body(
+///         serde_json::to_vec(r#"{"my telemetry message": "hi from device"}"#).unwrap(),
+///     )
+///     .set_id(String::from("my msg id"))
+///     .set_correlation_id(String::from("my correleation id"))
+///     .set_property(
+///         String::from("my property key"),
+///         String::from("my property value"),
+///     )
+///     .set_output_queue(String::from("my output queue"))
+///     .build();
 /// 
-///     let msg = IotMessage::builder()
-///         .set_body(
-///             serde_json::to_vec(r#"{"my telemetry message": "hi from device"}"#).unwrap(),
-///         )
-///         .set_id(String::from("my msg id"))
-///         .set_correlation_id(String::from("my correleation id"))
-///         .set_property(
-///             String::from("my property key"),
-///             String::from("my property value"),
-///         )
-///         .set_output_queue(String::from("my output queue"))
-///         .build();
-/// 
-///     client.send_d2c_message(msg).unwrap();
-///
-///     loop {
-///         client.do_work();
-///     }
-/// }
+/// client.send_d2c_message(msg);
 /// ```
 #[derive(Default, Debug)]
 pub struct IotMessage {
@@ -66,7 +59,7 @@ pub struct IotMessage {
     /// map of [mqtt message properties](https://docs.microsoft.com/de-de/azure/iot-hub/iot-c-sdk-ref/iothub-message-h/iothubmessage-getproperty)
     pub properties: HashMap<CString, CString>,
     /// map of [mqtt system message properties](https://docs.microsoft.com/de-de/azure/iot-hub/iot-c-sdk-ref/iothub-message-h/iothubmessage-getcontenttypesystemproperty)
-    pub system_properties: HashMap<&'static str, CString>,
+    pub system_properties: HashMap<CString, CString>,
 }
 
 unsafe impl Send for IotMessage {}
@@ -119,11 +112,11 @@ impl IotMessage {
                 }
             };
 
-            add_system_property("$.mid", IoTHubMessage_GetMessageId(handle));
-            add_system_property("$.cid", IoTHubMessage_GetCorrelationId(handle));
-            add_system_property("$.ct", IoTHubMessage_GetContentTypeSystemProperty(handle));
+            add_system_property(CString::new("$.mid").unwrap(), IoTHubMessage_GetMessageId(handle));
+            add_system_property(CString::new("$.cid").unwrap(), IoTHubMessage_GetCorrelationId(handle));
+            add_system_property(CString::new("$.ct").unwrap(), IoTHubMessage_GetContentTypeSystemProperty(handle));
             add_system_property(
-                "$.ce",
+                CString::new("$.ce").unwrap(),
                 IoTHubMessage_GetContentEncodingSystemProperty(handle),
             );
 
@@ -162,8 +155,8 @@ impl IotMessage {
                 ));
             }
 
-            for (&key, value) in &self.system_properties {
-                let res = match key {
+            for (key, value) in &self.system_properties {
+                let res = match key.to_str().unwrap() {
                     "$.mid" => IoTHubMessage_SetMessageId(handle, value.as_ptr()),
                     "$.cid" => IoTHubMessage_SetCorrelationId(handle, value.as_ptr()),
                     "$.ct" => IoTHubMessage_SetContentTypeSystemProperty(handle, value.as_ptr()),
@@ -173,7 +166,7 @@ impl IotMessage {
                     _ => {
                         error!(
                             "unknown system property found: {}, {}",
-                            key,
+                            key.to_str().unwrap(),
                             value.to_str().unwrap()
                         );
                         IOTHUB_MESSAGE_RESULT_TAG_IOTHUB_MESSAGE_OK
@@ -183,7 +176,7 @@ impl IotMessage {
                 if res != IOTHUB_MESSAGE_RESULT_TAG_IOTHUB_MESSAGE_OK {
                     return Err(Box::<dyn Error + Send + Sync>::from(format!(
                         "error while setting system property for: {}, {}",
-                        key,
+                        key.to_str().unwrap(),
                         value.to_str().unwrap()
                     )));
                 }
@@ -219,50 +212,183 @@ impl IotMessage {
 }
 
 /// Builder for constructing outgoing D2C message instances
+/// ```rust, no_run
+/// # use azure_iot_sdk::client::*;
+/// # struct MyEventHandler {}
+/// # impl EventHandler for MyEventHandler {}
+/// #
+/// #
+/// # let event_handler = MyEventHandler{};
+/// # let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+/// #
+/// let msg = IotMessage::builder()
+///     .set_body(
+///         serde_json::to_vec(r#"{"my telemetry message": "hi from device"}"#).unwrap(),
+///     )
+///     .set_id(String::from("my msg id"))
+///     .set_correlation_id(String::from("my correleation id"))
+///     .set_property(
+///         String::from("my property key"),
+///         String::from("my property value"),
+///     )
+///     .set_output_queue(String::from("my output queue"))
+///     .build();
+/// 
+/// client.send_d2c_message(msg);
+/// ```
 #[derive(Debug, Default)]
 pub struct IotMessageBuilder {
     message: Option<Vec<u8>>,
     output_queue: CString,
     properties: HashMap<CString, CString>,
-    system_properties: HashMap<&'static str, CString>,
+    system_properties: HashMap<CString, CString>,
 }
 
 impl IotMessageBuilder {
     /// Set the message body
+    /// ```rust, no_run
+    /// # use azure_iot_sdk::client::*;
+    /// # struct MyEventHandler {}
+    /// # impl EventHandler for MyEventHandler {}
+    /// #
+    /// #
+    /// # let event_handler = MyEventHandler{};
+    /// # let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+    /// #
+    /// let msg = IotMessage::builder()
+    ///     .set_body(
+    ///         serde_json::to_vec(r#"{"my telemetry message": "hi from device"}"#).unwrap(),
+    ///     )
+    ///     .build();
+    /// 
+    /// client.send_d2c_message(msg);
+    /// ```
     pub fn set_body(mut self, body: Vec<u8>) -> Self {
         self.message = Some(body);
         self
     }
 
     /// Set the identifier for this message
+    /// ```rust, no_run
+    /// # use azure_iot_sdk::client::*;
+    /// # struct MyEventHandler {}
+    /// # impl EventHandler for MyEventHandler {}
+    /// #
+    /// #
+    /// # let event_handler = MyEventHandler{};
+    /// # let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+    /// #
+    /// let msg = IotMessage::builder()
+    ///     .set_id(String::from("my msg id"))
+    ///     .build();
+    /// 
+    /// client.send_d2c_message(msg);
+    /// ```
     pub fn set_id(self, mid: String) -> Self {
-        self.set_system_property("$.mid", mid)
+        self.set_system_property(String::from("$.mid"), mid)
     }
 
     /// Set the identifier for this message
+    /// ```rust, no_run
+    /// # use azure_iot_sdk::client::*;
+    /// # struct MyEventHandler {}
+    /// # impl EventHandler for MyEventHandler {}
+    /// #
+    /// #
+    /// # let event_handler = MyEventHandler{};
+    /// # let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+    /// #
+    /// let msg = IotMessage::builder()
+    ///     .set_correlation_id(String::from("my correlation id"))
+    ///     .build();
+    /// 
+    /// client.send_d2c_message(msg);
+    /// ```
     pub fn set_correlation_id(self, cid: String) -> Self {
-        self.set_system_property("$.cid", cid)
+        self.set_system_property(String::from("$.cid"), cid)
     }
 
     /// Set the content-type for this message, such as `text/plain`.
     /// To allow routing query on the message body, this value should be set to `application/json`
+    /// ```rust, no_run
+    /// # use azure_iot_sdk::client::*;
+    /// # struct MyEventHandler {}
+    /// # impl EventHandler for MyEventHandler {}
+    /// #
+    /// #
+    /// # let event_handler = MyEventHandler{};
+    /// # let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+    /// #
+    /// let msg = IotMessage::builder()
+    ///     .set_content_type(String::from("application/json"))
+    ///     .build();
+    /// 
+    /// client.send_d2c_message(msg);
+    /// ```
     pub fn set_content_type(self, content_type: String) -> Self {
-        self.set_system_property("$.ct", content_type)
+        self.set_system_property(String::from("$.ct"), content_type)
     }
 
-    /// Set the content-encoding for this message.
-    /// If the content-type is set to `application/json`, allowed values are `UTF-8`, `UTF-16`, `UTF-32`.
+    /// Set the content-encoding for this message
+    /// If the content-type is set to `application/json`, allowed values are `UTF-8`, `UTF-16`, `UTF-32`
+    /// To allow routing query on the message body, this value should be set to `application/json`
+    /// ```rust, no_run
+    /// # use azure_iot_sdk::client::*;
+    /// # struct MyEventHandler {}
+    /// # impl EventHandler for MyEventHandler {}
+    /// #
+    /// #
+    /// # let event_handler = MyEventHandler{};
+    /// # let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+    /// #
+    /// let msg = IotMessage::builder()
+    ///     .set_content_encoding(String::from("UTF-8"))
+    ///     .build();
+    /// 
+    /// client.send_d2c_message(msg);
+    /// ```
     pub fn set_content_encoding(self, content_encoding: String) -> Self {
-        self.set_system_property("$.ce", content_encoding)
+        self.set_system_property(String::from("$.ce"), content_encoding)
     }
 
-    /// Set the output queue to be used with this message.
+    /// Set the output queue to be used with this message
+    /// ```rust, no_run
+    /// # use azure_iot_sdk::client::*;
+    /// # struct MyEventHandler {}
+    /// # impl EventHandler for MyEventHandler {}
+    /// #
+    /// #
+    /// # let event_handler = MyEventHandler{};
+    /// # let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+    /// #
+    /// let msg = IotMessage::builder()
+    ///     .set_output_queue(String::from("my output queue"))
+    ///     .build();
+    /// 
+    /// client.send_d2c_message(msg);
+    /// ```
     pub fn set_output_queue(mut self, queue: String) -> Self {
         self.output_queue = CString::new(queue).unwrap();
         self
     }
 
     /// Add a message property
+    /// ```rust, no_run
+    /// # use azure_iot_sdk::client::*;
+    /// # struct MyEventHandler {}
+    /// # impl EventHandler for MyEventHandler {}
+    /// #
+    /// #
+    /// # let event_handler = MyEventHandler{};
+    /// # let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+    /// #
+    /// let msg = IotMessage::builder()
+    ///     .set_property(String::from("my key1"), String::from("my property1"))
+    ///     .set_property(String::from("my key2"), String::from("my property2"))
+    ///     .build();
+    /// 
+    /// client.send_d2c_message(msg);
+    /// ```
     pub fn set_property(mut self, key: String, value: String) -> Self {
         self.properties
             .insert(CString::new(key).unwrap(), CString::new(value).unwrap());
@@ -283,13 +409,13 @@ impl IotMessageBuilder {
 
     /// System properties that are user settable
     /// https://docs.microsoft.com/bs-cyrl-ba/azure/iot-hub/iot-hub-devguide-messages-construct#system-properties-of-d2c-iot-hub-messages
-    /// The full list of valid "wire ids" is availabe here:
+    /// The full list of valid "wire ids" is available here:
     /// https://github.com/Azure/azure-iot-sdk-csharp/blob/67f8c75576edfcbc20e23a01afc88be47552e58c/iothub/device/src/Transport/Mqtt/MqttIotHubAdapter.cs#L1068-L1086
     /// If you need to add support for a new property,
     /// you should create a new public function that sets the appropriate wire id.
-    fn set_system_property(mut self, property_name: &'static str, value: String) -> Self {
+    fn set_system_property(mut self, property_name: String, value: String) -> Self {
         self.system_properties
-            .insert(property_name, CString::new(value).unwrap());
+            .insert(CString::new(property_name).unwrap(), CString::new(value).unwrap());
         self
     }
 }
