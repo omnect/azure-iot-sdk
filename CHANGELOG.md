@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.3] Q1 2022
  - added Cargo.audit.ignore 
+ - bumped to azure-iot-sdk-sys 0.2.2
 
 ## [0.5.2] Q1 2022
  - added rustdoc documentation
