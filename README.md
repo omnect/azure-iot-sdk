@@ -4,16 +4,20 @@ This repository provides an object oriented wrapper of the rust unsafe bindings 
 
 A reference implementation showing how this framework might be used can be found [here](https://github.com/ICS-DeviceManagement/iot-client-template-rs).
 
-## Build SDK
-If you intend to build the SDK locally the paths to the libraries listed below must be exported.
-- export LIB_PATH_AZURESDK=<path to the azure iot sdk c >
-- export LIB_PATH_UUID=<path to uid >
-- export LIB_PATH_OPENSSL=<path to openssl >
-- export LIB_PATH_CURL=<path to curl>
+# Build
 
-**We intend to provide these dependencies as public conan packages soon.**
+Please refer to [azure-iot-sdk-sys](https://github.com/ICS-DeviceManagement/azure-iot-sdk-sys/blob/main/README.md) documentation in order to provide mandatory libraries needed to build azure-iot-sdk successfully.
 
-## Generate documentation
+An error output similar to the following example indicates that libraries are not set correctly:
+>error: failed to run custom build command for `azure-iot-sdk-sys v0.2.2 (ssh://git@github.com/ICS-DeviceManagement/azure-iot-sdk-sys.git?tag=0.2.2#0357acbf)`
+>
+>Caused by:
+>  process didn't exit successfully: `/home/osboxes/projects/azure-iot-sdk/target/debug/build/azure-iot-sdk-sys-35a448ef75c7b5ee/build-script-build` (exit status: 101)
+>  --- stderr
+>  thread 'main' panicked at 'env LIB_PATH_AZURESDK is not available: NotPresent', /home/osboxes/.cargo/git/checkouts/azure-iot-sdk-sys-13093a02cfa1dea4/0357acb/build.rs:11:30
+
+# Generate documentation
+
 The rustdoc documentation of the SDK is not published yet but can be locally created by `cargo doc --lib --no-deps --open`.
 
 # License
