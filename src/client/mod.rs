@@ -7,6 +7,7 @@ use core::slice;
 use eis_utils::*;
 use log::{debug, error};
 use rand::Rng;
+use serde_json::json;
 use std::boxed::Box;
 use std::collections::HashMap;
 use std::error::Error;
@@ -602,6 +603,7 @@ impl IotHubClient {
         const METHOD_RESPONSE_SUCCESS: i32 = 200;
         const METHOD_RESPONSE_ERROR: i32 = 401;
 
+        let error;
         let empty_result: CString = CString::new("{ }").unwrap();
         *response_size = empty_result.as_bytes().len();
         *response = empty_result.into_raw() as *mut u8;
@@ -636,11 +638,17 @@ impl IotHubClient {
                     return METHOD_RESPONSE_SUCCESS;
                 }
 
-                Result::Err(e) => error!("error: {}", e),
+                Result::Err(e) => error = format!("error: {}", e),
             }
         } else {
-            error!("method not implemented: {}", method_name)
+            error = format!("method not implemented: {}", method_name)
         }
+
+        error!("{}", error);
+
+        let result: CString = CString::new(json!({ "error": error }).to_string()).unwrap();
+        *response_size = result.as_bytes().len();
+        *response = result.into_raw() as *mut u8;
 
         METHOD_RESPONSE_ERROR
     }
