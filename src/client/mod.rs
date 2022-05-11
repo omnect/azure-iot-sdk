@@ -638,13 +638,13 @@ impl IotHubClient {
                     return METHOD_RESPONSE_SUCCESS;
                 }
 
-                Result::Err(e) => error = format!("error: {}", e),
+                Result::Err(e) => error = e.to_string(),
             }
         } else {
             error = format!("method not implemented: {}", method_name)
         }
 
-        error!("{}", error);
+        error!("error: {}", error);
 
         let result: CString = CString::new(json!({ "error": error }).to_string()).unwrap();
         *response_size = result.as_bytes().len();
