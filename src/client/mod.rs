@@ -301,7 +301,7 @@ impl IotHubClient {
     /// ```
     pub fn from_connection_string(
         twin_type: TwinType,
-        connection_string: &str,
+        connection_string: impl Into<String>,
         event_handler: impl EventHandler + 'static,
     ) -> Result<Box<Self>, IotError> {
         IotHubClient::iothub_init()?;
@@ -311,7 +311,7 @@ impl IotHubClient {
             TwinType::Device => Box::new(DeviceTwin::default()),
         };
 
-        twin.create_from_connection_string(CString::new(connection_string)?)?;
+        twin.create_from_connection_string(CString::new(connection_string.into())?)?;
 
         let mut client = Box::new(IotHubClient {
             twin,
@@ -337,14 +337,15 @@ impl IotHubClient {
     ///     .set_body(
     ///         serde_json::to_vec(r#"{"my telemetry message": "hi from device"}"#).unwrap(),
     ///     )
-    ///     .set_id(String::from("my msg id"))
-    ///     .set_correlation_id(String::from("my correleation id"))
+    ///     .set_id("my msg id")
+    ///     .set_correlation_id("my correleation id")
     ///     .set_property(
-    ///         String::from("my property key"),
-    ///         String::from("my property value"),
+    ///         "my property key",
+    ///         "my property value",
     ///     )
-    ///     .set_output_queue(String::from("my output queue"))
-    ///     .build();
+    ///     .set_output_queue("my output queue")
+    ///     .build()
+    ///     .unwrap();
     ///
     /// client.send_d2c_message(msg);
     /// ```
@@ -545,13 +546,22 @@ impl IotHubClient {
             }
         }
 
-        let message = IotMessage::from_incoming_handle(handle, property_keys);
+        match IotMessage::from_incoming_handle(handle, property_keys) {
+            Ok(msg) => {
+                debug!("Received message from iothub: {:?}", msg);
 
-        debug!("Received message from iothub: {:?}", message);
-
-        match client.event_handler.handle_c2d_message(message) {
-            Ok(_) => IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_ACCEPTED,
-            Err(_) => IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_REJECTED,
+                match client.event_handler.handle_c2d_message(msg) {
+                    Ok(_) => IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_ACCEPTED,
+                    Err(e) => {
+                        error!("cannot handle c2d message: {}", e);
+                        IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_REJECTED
+                    }
+                }
+            }
+            Err(e) => {
+                error!("cannot create IotMessage from incomming handle: {}", e);
+                IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_REJECTED
+            }
         }
     }
 
