@@ -16,6 +16,9 @@ An error output similar to the following example indicates that libraries are no
 >  --- stderr
 >  thread 'main' panicked at 'env LIB_PATH_AZURESDK is not available: NotPresent', /home/osboxes/.cargo/git/checkouts/azure-iot-sdk-sys-13093a02cfa1dea4/0357acb/build.rs:11:30
 
+# Configuration
+todo
+
 # Generate documentation
 
 The rustdoc documentation of the SDK is not published yet but can be locally created by `cargo doc --lib --no-deps --open`.
