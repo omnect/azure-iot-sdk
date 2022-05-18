@@ -9,7 +9,7 @@ A reference implementation showing how this framework might be used can be found
 Please refer to [azure-iot-sdk-sys](https://github.com/ICS-DeviceManagement/azure-iot-sdk-sys/blob/main/README.md) documentation in order to provide mandatory libraries needed to build azure-iot-sdk successfully.
 
 An error output similar to the following example indicates that libraries are not set correctly:
->error: failed to run custom build command for `azure-iot-sdk-sys v0.2.2 (ssh://git@github.com/ICS-DeviceManagement/azure-iot-sdk-sys.git?tag=0.2.2#0357acbf)`
+>error: failed to run custom build command for `azure-iot-sdk-sys v0.3.0 (ssh://git@github.com/ICS-DeviceManagement/azure-iot-sdk-sys.git?tag=0.2.2#0357acbf)`
 >
 >Caused by:
 >  process didn't exit successfully: `/home/osboxes/projects/azure-iot-sdk/target/debug/build/azure-iot-sdk-sys-35a448ef75c7b5ee/build-script-build` (exit status: 101)

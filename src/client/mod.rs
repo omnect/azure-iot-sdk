@@ -1,9 +1,31 @@
 //! Let's you create an instance of [`Self::IotHubClient`] with integrated [`Self::EventHandler`].
+
+#[cfg(not(any(
+    feature = "device_twin",
+    feature = "module_twin",
+    feature = "edge_twin",
+)))]
+compile_error!("Either feature 'device_twin' 'module_twin' xor 'edge_twin' feature must be enabled for this crate.");
+
+#[cfg(all(feature = "device_twin", feature = "module_twin",))]
+compile_error!("Either feature 'device_twin' 'module_twin' xor 'edge_twin' feature must be enabled for this crate.");
+
+#[cfg(all(feature = "device_twin", feature = "edge_twin",))]
+compile_error!("Either feature 'device_twin' 'module_twin' xor 'edge_twin' feature must be enabled for this crate.");
+
+#[cfg(all(feature = "module_twin", feature = "edge_twin",))]
+compile_error!("Either feature 'device_twin' 'module_twin' xor 'edge_twin' feature must be enabled for this crate.");
+
 pub use self::message::{Direction, IotMessage, IotMessageBuilder};
+#[cfg(feature = "device_twin")]
+use self::twin::DeviceTwin;
 pub use self::twin::TwinType;
-use self::twin::{DeviceTwin, ModuleTwin, Twin};
+#[cfg(any(feature = "module_twin", feature = "edge_twin"))]
+use crate::client::twin::ModuleTwin;
+use crate::client::twin::Twin;
 use azure_iot_sdk_sys::*;
 use core::slice;
+#[cfg(any(feature = "module_twin", feature = "device_twin"))]
 use eis_utils::*;
 use log::{debug, error};
 use rand::Rng;
@@ -15,6 +37,7 @@ use std::ffi::{c_void, CStr, CString};
 use std::mem;
 use std::str;
 use std::sync::Once;
+#[cfg(any(feature = "module_twin", feature = "device_twin"))]
 use std::time::{Duration, SystemTime};
 
 /// crate wide shortcut for error type
@@ -28,6 +51,7 @@ mod twin;
 static mut IOTHUB_INIT_RESULT: i32 = -1;
 static IOTHUB_INIT_ONCE: Once = Once::new();
 
+#[cfg(any(feature = "module_twin", feature = "device_twin"))]
 macro_rules! days_to_secs {
     ($num_days:expr) => {
         $num_days * 24 * 60 * 60
@@ -240,7 +264,7 @@ pub trait EventHandler {
 ///
 /// fn main() {
 ///     let event_handler = MyEventHandler{};
-///     let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+///     let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
 ///
 ///     loop {
 ///         client.do_work();
@@ -254,6 +278,72 @@ pub struct IotHubClient {
 }
 
 impl IotHubClient {
+    /// call this function in order to get the configured [`TwinType`] feature.
+    /// ```rust, no_run
+    /// # use azure_iot_sdk::client::*;
+    /// #
+    /// IotHubClient::get_twin_type();
+    /// ```
+    pub fn get_twin_type() -> TwinType {
+        #[cfg(feature = "device_twin")]
+        return TwinType::Device;
+
+        #[cfg(feature = "module_twin")]
+        return TwinType::Module;
+
+        #[cfg(feature = "edge_twin")]
+        return TwinType::Edge;
+    }
+
+    /// call this function in order to create an instance of [`IotHubClient`] from iotedge environment.
+    /// ***Note***: this feature is only available with "edge_twin" feature enabled.
+    /// ```rust, no_run
+    /// # use azure_iot_sdk::client::*;
+    /// # struct MyEventHandler {}
+    /// # impl EventHandler for MyEventHandler {}
+    /// #
+    /// let event_handler = MyEventHandler{};
+    /// let mut client = IotHubClient::from_edge_environment(event_handler).unwrap();
+    /// ```
+    #[cfg(feature = "edge_twin")]
+    pub fn from_edge_environment(
+        event_handler: impl EventHandler + 'static,
+    ) -> Result<Box<Self>, IotError> {
+        IotHubClient::iothub_init()?;
+
+        let mut twin = Box::new(ModuleTwin::default());
+
+        twin.create_from_edge_environment()?;
+
+        let mut client = Box::new(IotHubClient {
+            twin,
+            event_handler: Box::new(event_handler),
+        });
+
+        client.set_callbacks()?;
+
+        Ok(client)
+    }
+
+    /// call this function in order to create an instance of [`IotHubClient`] from iotedge environment.
+    /// ***Note***: this feature is only available with "edge_twin" feature enabled.
+    /// ```rust, no_run
+    /// # use azure_iot_sdk::client::*;
+    /// # struct MyEventHandler {}
+    /// # impl EventHandler for MyEventHandler {}
+    /// #
+    /// let event_handler = MyEventHandler{};
+    /// let mut client = IotHubClient::from_edge_environment(event_handler).unwrap();
+    /// ```
+    #[cfg(not(feature = "edge_twin"))]
+    pub fn from_edge_environment(
+        _event_handler: impl EventHandler + 'static,
+    ) -> Result<Box<Self>, IotError> {
+        return Err(Box::<dyn Error + Send + Sync>::from(
+            "only edge modules can connect via from_edge_environment(). either use from_identity_service() or from_connection_string().",
+        ));
+    }
+
     /// call this function in order to create an instance of [`IotHubClient`] by using iot-identity-service.
     /// ***Note***: this feature is currently [not supported for all combinations of identity type and authentication mechanism](https://azure.github.io/iot-identity-service/develop-an-agent.html#connecting-your-agent-to-iot-hub).
     /// ```rust, no_run
@@ -262,28 +352,46 @@ impl IotHubClient {
     /// # impl EventHandler for MyEventHandler {}
     /// #
     /// let event_handler = MyEventHandler{};
-    /// let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+    /// let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
     /// ```
+    #[cfg(feature = "edge_twin")]
     pub fn from_identity_service(
-        twin_type: TwinType,
+        _event_handler: impl EventHandler + 'static,
+    ) -> Result<Box<Self>, IotError> {
+        return Err(Box::<dyn Error + Send + Sync>::from(
+            "edge modules can't use from_identity_service to get connection string. either use from_edge_environment() or from_connection_string().",
+        ));
+    }
+
+    /// call this function in order to create an instance of [`IotHubClient`] by using iot-identity-service.
+    /// ***Note***: this feature is currently [not supported for all combinations of identity type and authentication mechanism](https://azure.github.io/iot-identity-service/develop-an-agent.html#connecting-your-agent-to-iot-hub).
+    /// ```rust, no_run
+    /// # use azure_iot_sdk::client::*;
+    /// # struct MyEventHandler {}
+    /// # impl EventHandler for MyEventHandler {}
+    /// #
+    /// let event_handler = MyEventHandler{};
+    /// let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
+    /// ```
+    #[cfg(any(feature = "module_twin", feature = "device_twin"))]
+    pub fn from_identity_service(
         event_handler: impl EventHandler + 'static,
     ) -> Result<Box<Self>, IotError> {
         let connection_info = request_connection_string_from_eis_with_expiry(
-            SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)?
-                .saturating_add(Duration::from_secs(days_to_secs!(30))),
-        )
-        .map_err(|err| {
-            if let TwinType::Device = twin_type {
-                error!("iot identity service failed to create device twin identity.
-                In case you use TPM attestation please note that this combination is currently not supported.");
-            }
+                SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)?
+                    .saturating_add(Duration::from_secs(days_to_secs!(30))),
+            )
+            .map_err(|err| {
+                if cfg!(device_twin) {
+                    error!("iot identity service failed to create device twin identity.
+                    In case you use TPM attestation please note that this combination is currently not supported.");
+                }
 
-            err
-        })?;
+                err
+            })?;
 
         IotHubClient::from_connection_string(
-            twin_type,
             connection_info.connection_string.as_str(),
             event_handler,
         )
@@ -297,19 +405,19 @@ impl IotHubClient {
     /// #
     /// let event_handler = MyEventHandler{};
     /// let con_str = "HostName=my-iothub.azure-devices.net;DeviceId=my-dev-id;SharedAccessKey=my-sas-key=";
-    /// let mut client = IotHubClient::from_connection_string(TwinType::Module, con_str, event_handler).unwrap();
+    /// let mut client = IotHubClient::from_connection_string(con_str, event_handler).unwrap();
     /// ```
     pub fn from_connection_string(
-        twin_type: TwinType,
         connection_string: impl Into<String>,
         event_handler: impl EventHandler + 'static,
     ) -> Result<Box<Self>, IotError> {
         IotHubClient::iothub_init()?;
 
-        let mut twin: Box<dyn Twin> = match twin_type {
-            TwinType::Module => Box::new(ModuleTwin::default()),
-            TwinType::Device => Box::new(DeviceTwin::default()),
-        };
+        #[cfg(any(feature = "module_twin", feature = "edge_twin"))]
+        let mut twin = Box::new(ModuleTwin::default());
+
+        #[cfg(feature = "device_twin")]
+        let mut twin = Box::new(DeviceTwin::default());
 
         twin.create_from_connection_string(CString::new(connection_string.into())?)?;
 
@@ -331,7 +439,7 @@ impl IotHubClient {
     /// #
     /// #
     /// # let event_handler = MyEventHandler{};
-    /// # let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+    /// # let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
     /// #
     /// let msg = IotMessage::builder()
     ///     .set_body(
@@ -375,7 +483,7 @@ impl IotHubClient {
     /// #
     /// #
     /// # let event_handler = MyEventHandler{};
-    /// # let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+    /// # let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
     /// #
     /// let reported = json!({
     ///     "my_status": {
@@ -411,7 +519,7 @@ impl IotHubClient {
     /// # impl EventHandler for MyEventHandler {}
     /// #
     /// # let event_handler = MyEventHandler{};
-    /// # let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+    /// # let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
     /// #
     /// loop {
     ///     client.do_work();
@@ -700,7 +808,7 @@ impl IotHubClient {
             error = format!("method not implemented: {}", method_name)
         }
 
-        error!("error: {}", error);
+        error!("{}", error);
 
         match CString::new(json!(error).to_string()) {
             Ok(r) => {

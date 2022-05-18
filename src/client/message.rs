@@ -28,9 +28,8 @@ impl Default for Direction {
 /// # struct MyEventHandler {}
 /// # impl EventHandler for MyEventHandler {}
 /// #
-/// #
 /// # let event_handler = MyEventHandler{};
-/// # let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+/// # let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
 /// #
 /// let msg = IotMessage::builder()
 ///     .set_body(
@@ -220,9 +219,8 @@ impl IotMessage {
 /// # struct MyEventHandler {}
 /// # impl EventHandler for MyEventHandler {}
 /// #
-/// #
 /// # let event_handler = MyEventHandler{};
-/// # let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+/// # let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
 /// #
 /// let msg = IotMessage::builder()
 ///     .set_body(
@@ -255,9 +253,8 @@ impl IotMessageBuilder {
     /// # struct MyEventHandler {}
     /// # impl EventHandler for MyEventHandler {}
     /// #
-    /// #
     /// # let event_handler = MyEventHandler{};
-    /// # let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+    /// # let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
     /// #
     /// let msg = IotMessage::builder()
     ///     .set_body(
@@ -279,9 +276,8 @@ impl IotMessageBuilder {
     /// # struct MyEventHandler {}
     /// # impl EventHandler for MyEventHandler {}
     /// #
-    /// #
     /// # let event_handler = MyEventHandler{};
-    /// # let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+    /// # let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
     /// #
     /// let msg = IotMessage::builder()
     ///     .set_id("my msg id")
@@ -299,10 +295,9 @@ impl IotMessageBuilder {
     /// # use azure_iot_sdk::client::*;
     /// # struct MyEventHandler {}
     /// # impl EventHandler for MyEventHandler {}
-    /// #
-    /// #
+    /// 
     /// # let event_handler = MyEventHandler{};
-    /// # let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+    /// # let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
     /// #
     /// let msg = IotMessage::builder()
     ///     .set_correlation_id("my correlation id")
@@ -322,9 +317,8 @@ impl IotMessageBuilder {
     /// # struct MyEventHandler {}
     /// # impl EventHandler for MyEventHandler {}
     /// #
-    /// #
     /// # let event_handler = MyEventHandler{};
-    /// # let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+    /// # let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
     /// #
     /// let msg = IotMessage::builder()
     ///     .set_content_type("application/json")
@@ -345,9 +339,8 @@ impl IotMessageBuilder {
     /// # struct MyEventHandler {}
     /// # impl EventHandler for MyEventHandler {}
     /// #
-    /// #
     /// # let event_handler = MyEventHandler{};
-    /// # let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+    /// # let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
     /// #
     /// let msg = IotMessage::builder()
     ///     .set_content_encoding("UTF-8")
@@ -366,9 +359,8 @@ impl IotMessageBuilder {
     /// # struct MyEventHandler {}
     /// # impl EventHandler for MyEventHandler {}
     /// #
-    /// #
     /// # let event_handler = MyEventHandler{};
-    /// # let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+    /// # let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
     /// #
     /// let msg = IotMessage::builder()
     ///     .set_output_queue("my output queue")
@@ -388,9 +380,8 @@ impl IotMessageBuilder {
     /// # struct MyEventHandler {}
     /// # impl EventHandler for MyEventHandler {}
     /// #
-    /// #
     /// # let event_handler = MyEventHandler{};
-    /// # let mut client = IotHubClient::from_identity_service(TwinType::Module, event_handler).unwrap();
+    /// # let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
     /// #
     /// let msg = IotMessage::builder()
     ///     .set_property("my key1", "my property1")
