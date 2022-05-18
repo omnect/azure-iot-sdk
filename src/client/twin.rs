@@ -193,7 +193,7 @@ impl Twin for ModuleTwin {
         ctx: *mut std::ffi::c_void,
     ) -> Result<(), IotError> {
         unsafe {
-            let input_name = CString::new("input").unwrap();
+            let input_name = CString::new("input")?;
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubModuleClient_LL_SetInputMessageCallback(
                     self.handle.unwrap(),

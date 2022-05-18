@@ -301,7 +301,7 @@ impl IotHubClient {
     /// ```
     pub fn from_connection_string(
         twin_type: TwinType,
-        connection_string: &str,
+        connection_string: impl Into<String>,
         event_handler: impl EventHandler + 'static,
     ) -> Result<Box<Self>, IotError> {
         IotHubClient::iothub_init()?;
@@ -311,7 +311,7 @@ impl IotHubClient {
             TwinType::Device => Box::new(DeviceTwin::default()),
         };
 
-        twin.create_from_connection_string(CString::new(connection_string)?)?;
+        twin.create_from_connection_string(CString::new(connection_string.into())?)?;
 
         let mut client = Box::new(IotHubClient {
             twin,
@@ -337,14 +337,15 @@ impl IotHubClient {
     ///     .set_body(
     ///         serde_json::to_vec(r#"{"my telemetry message": "hi from device"}"#).unwrap(),
     ///     )
-    ///     .set_id(String::from("my msg id"))
-    ///     .set_correlation_id(String::from("my correleation id"))
+    ///     .set_id("my msg id")
+    ///     .set_correlation_id("my correleation id")
     ///     .set_property(
-    ///         String::from("my property key"),
-    ///         String::from("my property value"),
+    ///         "my property key",
+    ///         "my property value",
     ///     )
-    ///     .set_output_queue(String::from("my output queue"))
-    ///     .build();
+    ///     .set_output_queue("my output queue")
+    ///     .build()
+    ///     .unwrap();
     ///
     /// client.send_d2c_message(msg);
     /// ```
@@ -388,7 +389,7 @@ impl IotHubClient {
     pub fn send_reported_state(&mut self, reported: serde_json::Value) -> Result<(), IotError> {
         debug!("send reported: {}", reported.to_string());
 
-        let reported_state = CString::new(reported.to_string()).unwrap();
+        let reported_state = CString::new(reported.to_string())?;
         let size = reported_state.as_bytes().len();
         let ctx = self as *mut IotHubClient as *mut c_void;
 
@@ -526,21 +527,41 @@ impl IotHubClient {
         ctx: *mut ::std::os::raw::c_void,
     ) -> IOTHUBMESSAGE_DISPOSITION_RESULT {
         let client = &mut *(ctx as *mut IotHubClient);
+        let mut property_keys: Vec<CString> = vec![];
 
-        let property_keys = client
+        for p_str in client
             .event_handler
             .get_c2d_message_property_keys()
             .into_iter()
-            .map(|s| CString::new(s).unwrap())
-            .collect();
+        {
+            match CString::new(p_str) {
+                Ok(p_cstr) => property_keys.push(p_cstr),
+                Err(e) => {
+                    error!(
+                        "invalid property in c2d message received. payload: {}, error: {}",
+                        p_str, e
+                    );
+                    return IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_REJECTED;
+                }
+            }
+        }
 
-        let message = IotMessage::from_incoming_handle(handle, property_keys);
+        match IotMessage::from_incoming_handle(handle, property_keys) {
+            Ok(msg) => {
+                debug!("Received message from iothub: {:?}", msg);
 
-        debug!("Received message from iothub: {:?}", message);
-
-        match client.event_handler.handle_c2d_message(message) {
-            Ok(_) => IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_ACCEPTED,
-            Err(_) => IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_REJECTED,
+                match client.event_handler.handle_c2d_message(msg) {
+                    Ok(_) => IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_ACCEPTED,
+                    Err(e) => {
+                        error!("cannot handle c2d message: {}", e);
+                        IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_REJECTED
+                    }
+                }
+            }
+            Err(e) => {
+                error!("cannot create IotMessage from incomming handle: {}", e);
+                IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_REJECTED
+            }
         }
     }
 
@@ -550,20 +571,30 @@ impl IotHubClient {
         size: usize,
         ctx: *mut ::std::os::raw::c_void,
     ) {
-        let payload: serde_json::Value =
-            serde_json::from_slice(slice::from_raw_parts(payload, size)).unwrap();
-        let client = &mut *(ctx as *mut IotHubClient);
-        let state: TwinUpdateState = mem::transmute(state as i8);
+        match String::from_utf8(slice::from_raw_parts(payload, size).to_vec()) {
+            Ok(p_str) => {
+                match serde_json::from_str(&p_str) {
+                    Ok(p_json) => {
+                        let client = &mut *(ctx as *mut IotHubClient);
+                        let state: TwinUpdateState = mem::transmute(state as i8);
 
-        debug!(
-            "Twin callback. state: {:?} size: {} payload: {}",
-            state, size, payload
-        );
+                        debug!(
+                            "Twin callback. state: {:?} size: {} payload: {}",
+                            state, size, p_json
+                        );
 
-        client
-            .event_handler
-            .handle_twin_desired(state, payload)
-            .unwrap();
+                        if let Err(e) = client.event_handler.handle_twin_desired(state, p_json) {
+                            error!("client cannot handle desired twin: {}", e)
+                        }
+                    }
+                    Err(e) => error!(
+                        "desired twin cannot be parsed. payload: {} error: {}",
+                        p_str, e
+                    ),
+                };
+            }
+            Err(e) => error!("desired twin cannot be parsed: {}", e),
+        }
     }
 
     unsafe extern "C" fn c_get_twin_async_callback(
@@ -573,13 +604,13 @@ impl IotHubClient {
         _ctx: *mut ::std::os::raw::c_void,
     ) {
         let state: TwinUpdateState = mem::transmute(state as i8);
-
-        debug!(
-            "GetTwinAsync result. state: {:?} size: {} payload: {}",
-            state,
-            size,
-            str::from_utf8(slice::from_raw_parts(payload, size)).unwrap()
-        );
+        match str::from_utf8(slice::from_raw_parts(payload, size)) {
+            Ok(p) => debug!(
+                "GetTwinAsync result. state: {:?} size: {} payload: {}",
+                state, size, p
+            ),
+            Err(e) => error!("get twin async cannot parse payload: {}", e),
+        }
     }
 
     unsafe extern "C" fn c_reported_twin_callback(
@@ -604,11 +635,18 @@ impl IotHubClient {
         const METHOD_RESPONSE_ERROR: i32 = 401;
 
         let error;
-        let empty_result: CString = CString::new("{ }").unwrap();
+        let empty_result: CString = CString::from_vec_unchecked(b"{ }".to_vec());
         *response_size = empty_result.as_bytes().len();
         *response = empty_result.into_raw() as *mut u8;
 
-        let method_name = CStr::from_ptr(method_name).to_str().unwrap();
+        let method_name = match CStr::from_ptr(method_name).to_str() {
+            Ok(name) => name,
+            Err(e) => {
+                error!("cannot parse method name: {}", e);
+                return METHOD_RESPONSE_ERROR;
+            }
+        };
+
         debug!("Received direct method call: {:?}", method_name);
 
         let client = &mut *(ctx as *mut IotHubClient);
@@ -618,9 +656,21 @@ impl IotHubClient {
             .get_direct_methods()
             .and_then(|methods| (methods.get(method_name)))
         {
-            let payload = slice::from_raw_parts(payload, size);
             let payload: serde_json::Value =
-                serde_json::from_str(str::from_utf8(payload).unwrap()).unwrap();
+                match str::from_utf8(slice::from_raw_parts(payload, size)) {
+                    Ok(p) => match serde_json::from_str(p) {
+                        Ok(json) => json,
+                        Err(e) => {
+                            error!("cannot parse direct method payload: {}", e);
+                            return METHOD_RESPONSE_ERROR;
+                        }
+                    },
+                    Err(e) => {
+                        error!("cannot parse direct method payload: {}", e);
+                        return METHOD_RESPONSE_ERROR;
+                    }
+                };
+
             debug!("Payload: {}", payload.to_string());
 
             match method(payload) {
@@ -631,11 +681,17 @@ impl IotHubClient {
                 Result::Ok(Some(result)) => {
                     debug!("Result: {}", result.to_string());
 
-                    let result: CString = CString::new(result.to_string()).unwrap();
-                    *response_size = result.as_bytes().len();
-                    *response = result.into_raw() as *mut u8;
-
-                    return METHOD_RESPONSE_SUCCESS;
+                    match CString::new(result.to_string()) {
+                        Ok(r) => {
+                            *response_size = r.as_bytes().len();
+                            *response = r.into_raw() as *mut u8;
+                            return METHOD_RESPONSE_SUCCESS;
+                        }
+                        Err(e) => {
+                            error!("cannot parse direct method result: {}", e);
+                            return METHOD_RESPONSE_ERROR;
+                        }
+                    }
                 }
 
                 Result::Err(e) => error = e.to_string(),
@@ -646,9 +702,15 @@ impl IotHubClient {
 
         error!("error: {}", error);
 
-        let result: CString = CString::new(json!({ "error": error }).to_string()).unwrap();
-        *response_size = result.as_bytes().len();
-        *response = result.into_raw() as *mut u8;
+        match CString::new(json!(error).to_string()) {
+            Ok(r) => {
+                *response_size = r.as_bytes().len();
+                *response = r.into_raw() as *mut u8;
+            }
+            Err(e) => {
+                error!("cannot parse direct method result: {}", e);
+            }
+        }
 
         METHOD_RESPONSE_ERROR
     }
