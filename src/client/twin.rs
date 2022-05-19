@@ -18,7 +18,7 @@ pub struct DeviceTwin {
 
 /// type of client twin
 #[derive(Debug, PartialEq)]
-pub enum TwinType {
+pub enum ClientType {
     /// edge module twin client
     Edge,
     /// module twin client

@@ -6,6 +6,7 @@ A reference implementation showing how this framework might be used can be found
 
 # Build
 
+## Dependencies
 Please refer to [azure-iot-sdk-sys](https://github.com/ICS-DeviceManagement/azure-iot-sdk-sys/blob/main/README.md) documentation in order to provide mandatory libraries needed to build azure-iot-sdk successfully.
 
 An error output similar to the following example indicates that libraries are not set correctly:
@@ -16,8 +17,12 @@ An error output similar to the following example indicates that libraries are no
 >  --- stderr
 >  thread 'main' panicked at 'env LIB_PATH_AZURESDK is not available: NotPresent', /home/osboxes/.cargo/git/checkouts/azure-iot-sdk-sys-13093a02cfa1dea4/0357acb/build.rs:11:30
 
-# Configuration
-todo
+## Configuration
+
+In order to create the purposed iot client, the crate must be configured via cargo feature to one of the following types:
+- `device_client`
+- `module_client`
+- `edge_client`
 
 # Generate documentation
 

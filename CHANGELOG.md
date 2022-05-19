@@ -8,8 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.8.0] Q2 2022
  - added iot edge module support:
    - bumb to azure-iot-sdk-sys 0.3.0
-   - introduced cargo features to select twin type
-   - conditional compilation depending on twin type
+   - introduced cargo features to select client type (device, module, edge)
+   - conditional compilation depending on client type
 
 ## [0.7.0] Q2 2022
  - removed all avoidable unwraps()

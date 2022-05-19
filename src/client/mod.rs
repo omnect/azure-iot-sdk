@@ -4,22 +4,23 @@
     feature = "device_client",
     feature = "module_client",
     feature = "edge_client",
+    doc
 )))]
 compile_error!("Either feature 'device_client' 'module_client' xor 'edge_client' feature must be enabled for this crate.");
 
-#[cfg(all(feature = "device_client", feature = "module_client",))]
+#[cfg(all(feature = "device_client", feature = "module_client"))]
 compile_error!("Either feature 'device_client' 'module_client' xor 'edge_client' feature must be enabled for this crate.");
 
-#[cfg(all(feature = "device_client", feature = "edge_client",))]
+#[cfg(all(feature = "device_client", feature = "edge_client"))]
 compile_error!("Either feature 'device_client' 'module_client' xor 'edge_client' feature must be enabled for this crate.");
 
-#[cfg(all(feature = "module_client", feature = "edge_client",))]
+#[cfg(all(feature = "module_client", feature = "edge_client"))]
 compile_error!("Either feature 'device_client' 'module_client' xor 'edge_client' feature must be enabled for this crate.");
 
 pub use self::message::{Direction, IotMessage, IotMessageBuilder};
+pub use self::twin::ClientType;
 #[cfg(feature = "device_client")]
 use self::twin::DeviceTwin;
-pub use self::twin::TwinType;
 #[cfg(any(feature = "module_client", feature = "edge_client"))]
 use crate::client::twin::ModuleTwin;
 use crate::client::twin::Twin;
@@ -45,7 +46,7 @@ pub type IotError = Box<dyn Error + Send + Sync>;
 
 /// iothub cloud to device (C2D) and device to cloud (D2C) messages
 mod message;
-/// twin implementation, ether device or module twin
+/// client implementation, either device, module or edge
 mod twin;
 
 static mut IOTHUB_INIT_RESULT: i32 = -1;
@@ -181,8 +182,8 @@ pub type DirectMethodMap = HashMap<String, DirectMethod>;
 /// }
 /// ```
 pub trait EventHandler {
-    /// gets called as a result of calling [`IotHubClient::from_identity_service()`] or
-    /// [`IotHubClient::from_connection_string()`]
+    /// gets called as a result of calling [`IotHubClient::from_identity_service()`],
+    /// [`IotHubClient::from_connection_string()`] or [`IotHubClient::from_edge_environment()`]
     fn handle_connection_status(&self, auth_status: AuthenticationStatus) {
         debug!(
             "unhandled call to handle_connection_status(). status: {:?}",
@@ -278,24 +279,24 @@ pub struct IotHubClient {
 }
 
 impl IotHubClient {
-    /// call this function in order to get the configured [`TwinType`] feature.
+    /// call this function in order to get the configured [`ClientType`] feature.
     /// ```rust, no_run
     /// # use azure_iot_sdk::client::*;
     /// #
-    /// IotHubClient::get_twin_type();
+    /// IotHubClient::get_client_type();
     /// ```
-    pub fn get_twin_type() -> TwinType {
+    pub fn get_client_type() -> ClientType {
         #[cfg(feature = "device_client")]
-        return TwinType::Device;
+        return ClientType::Device;
 
         #[cfg(feature = "module_client")]
-        return TwinType::Module;
+        return ClientType::Module;
 
         #[cfg(feature = "edge_client")]
-        return TwinType::Edge;
+        return ClientType::Edge;
     }
 
-    /// call this function in order to create an instance of [`IotHubClient`] from iotedge environment.
+    /// call this function in order to create an instance of [`IotHubClient`] from iotedge environment.<br>
     /// ***Note***: this feature is only available with "edge_client" feature enabled.
     /// ```rust, no_run
     /// # use azure_iot_sdk::client::*;
@@ -305,47 +306,36 @@ impl IotHubClient {
     /// let event_handler = MyEventHandler{};
     /// let mut client = IotHubClient::from_edge_environment(event_handler).unwrap();
     /// ```
-    #[cfg(feature = "edge_client")]
-    pub fn from_edge_environment(
-        event_handler: impl EventHandler + 'static,
-    ) -> Result<Box<Self>, IotError> {
-        IotHubClient::iothub_init()?;
-
-        let mut twin = Box::new(ModuleTwin::default());
-
-        twin.create_from_edge_environment()?;
-
-        let mut client = Box::new(IotHubClient {
-            twin,
-            event_handler: Box::new(event_handler),
-        });
-
-        client.set_callbacks()?;
-
-        Ok(client)
-    }
-
-    /// call this function in order to create an instance of [`IotHubClient`] from iotedge environment.
-    /// ***Note***: this feature is only available with "edge_client" feature enabled.
-    /// ```rust, no_run
-    /// # use azure_iot_sdk::client::*;
-    /// # struct MyEventHandler {}
-    /// # impl EventHandler for MyEventHandler {}
-    /// #
-    /// let event_handler = MyEventHandler{};
-    /// let mut client = IotHubClient::from_edge_environment(event_handler).unwrap();
-    /// ```
-    #[cfg(not(feature = "edge_client"))]
     pub fn from_edge_environment(
         _event_handler: impl EventHandler + 'static,
     ) -> Result<Box<Self>, IotError> {
+        #[cfg(not(feature = "edge_client"))]
         return Err(Box::<dyn Error + Send + Sync>::from(
             "only edge modules can connect via from_edge_environment(). either use from_identity_service() or from_connection_string().",
         ));
+
+        #[cfg(feature = "edge_client")]
+        {
+            IotHubClient::iothub_init()?;
+
+            let mut twin = Box::new(ModuleTwin::default());
+
+            twin.create_from_edge_environment()?;
+
+            let mut client = Box::new(IotHubClient {
+                twin,
+                event_handler: Box::new(_event_handler),
+            });
+
+            client.set_callbacks()?;
+
+            Ok(client)
+        }
     }
 
-    /// call this function in order to create an instance of [`IotHubClient`] by using iot-identity-service.
-    /// ***Note***: this feature is currently [not supported for all combinations of identity type and authentication mechanism](https://azure.github.io/iot-identity-service/develop-an-agent.html#connecting-your-agent-to-iot-hub).
+    /// call this function in order to create an instance of [`IotHubClient`] by using iot-identity-service.<br>
+    /// ***Note1***: this feature is only available with "device_client" or "module_client" feature enabled.<br>
+    /// ***Note2***: this feature is currently [not supported for all combinations of identity type and authentication mechanism](https://azure.github.io/iot-identity-service/develop-an-agent.html#connecting-your-agent-to-iot-hub).
     /// ```rust, no_run
     /// # use azure_iot_sdk::client::*;
     /// # struct MyEventHandler {}
@@ -354,47 +344,35 @@ impl IotHubClient {
     /// let event_handler = MyEventHandler{};
     /// let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
     /// ```
-    #[cfg(feature = "edge_client")]
     pub fn from_identity_service(
         _event_handler: impl EventHandler + 'static,
     ) -> Result<Box<Self>, IotError> {
+        #[cfg(feature = "edge_client")]
         return Err(Box::<dyn Error + Send + Sync>::from(
             "edge modules can't use from_identity_service to get connection string. either use from_edge_environment() or from_connection_string().",
         ));
-    }
 
-    /// call this function in order to create an instance of [`IotHubClient`] by using iot-identity-service.
-    /// ***Note***: this feature is currently [not supported for all combinations of identity type and authentication mechanism](https://azure.github.io/iot-identity-service/develop-an-agent.html#connecting-your-agent-to-iot-hub).
-    /// ```rust, no_run
-    /// # use azure_iot_sdk::client::*;
-    /// # struct MyEventHandler {}
-    /// # impl EventHandler for MyEventHandler {}
-    /// #
-    /// let event_handler = MyEventHandler{};
-    /// let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
-    /// ```
-    #[cfg(any(feature = "module_client", feature = "device_client"))]
-    pub fn from_identity_service(
-        event_handler: impl EventHandler + 'static,
-    ) -> Result<Box<Self>, IotError> {
-        let connection_info = request_connection_string_from_eis_with_expiry(
+        #[cfg(any(feature = "module_client", feature = "device_client"))]
+        {
+            let connection_info = request_connection_string_from_eis_with_expiry(
                 SystemTime::now()
                     .duration_since(SystemTime::UNIX_EPOCH)?
                     .saturating_add(Duration::from_secs(days_to_secs!(30))),
             )
             .map_err(|err| {
                 if cfg!(device_client) {
-                    error!("iot identity service failed to create device twin identity.
+                    error!("iot identity service failed to create device client identity.
                     In case you use TPM attestation please note that this combination is currently not supported.");
                 }
 
                 err
             })?;
 
-        IotHubClient::from_connection_string(
-            connection_info.connection_string.as_str(),
-            event_handler,
-        )
+            IotHubClient::from_connection_string(
+                connection_info.connection_string.as_str(),
+                _event_handler,
+            )
+        }
     }
 
     /// call this function in order to create an instance of [`IotHubClient`] by using a connection string.
