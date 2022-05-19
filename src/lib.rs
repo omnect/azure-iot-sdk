@@ -1,18 +1,18 @@
 #![warn(missing_docs)]
 
 //! Wrapper around azure iot-c-sdk-ref.
-//! 
-//! A reference implementation can be found [here](https://github.com/ICS-DeviceManagement/iot-client-template-rs).//! 
+//!
+//! A reference implementation can be found [here](https://github.com/ICS-DeviceManagement/iot-client-template-rs).//!
 //!
 //! Provides an abstraction over Microsoft's iot-c-sdk in order to develop device- and module twin client applications.
 //! All API's exposed by this crate base on the following low level function interfaces:
 //! - [module client](https://docs.microsoft.com/de-de/azure/iot-hub/iot-c-sdk-ref/iothub-module-client-ll-h)
 //! - [device client](https://docs.microsoft.com/de-de/azure/iot-hub/iot-c-sdk-ref/iothub-device-client-ll-h)
-//! 
-//! The crate must be configured via cargo feature to one of the following twin types:
-//! - device_twin
-//! - module_twin
-//! - edge_twin
+//!
+//! The crate must be configured via cargo feature to one of the following client types:
+//! - device_client
+//! - module_client
+//! - edge_client
 //!
 //! The following use cases can be realized by using this crate:
 //! - connect as iot module, iot edge module or device client to azure iothub.

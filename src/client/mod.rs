@@ -1,31 +1,31 @@
 //! Let's you create an instance of [`Self::IotHubClient`] with integrated [`Self::EventHandler`].
 
 #[cfg(not(any(
-    feature = "device_twin",
-    feature = "module_twin",
-    feature = "edge_twin",
+    feature = "device_client",
+    feature = "module_client",
+    feature = "edge_client",
 )))]
-compile_error!("Either feature 'device_twin' 'module_twin' xor 'edge_twin' feature must be enabled for this crate.");
+compile_error!("Either feature 'device_client' 'module_client' xor 'edge_client' feature must be enabled for this crate.");
 
-#[cfg(all(feature = "device_twin", feature = "module_twin",))]
-compile_error!("Either feature 'device_twin' 'module_twin' xor 'edge_twin' feature must be enabled for this crate.");
+#[cfg(all(feature = "device_client", feature = "module_client",))]
+compile_error!("Either feature 'device_client' 'module_client' xor 'edge_client' feature must be enabled for this crate.");
 
-#[cfg(all(feature = "device_twin", feature = "edge_twin",))]
-compile_error!("Either feature 'device_twin' 'module_twin' xor 'edge_twin' feature must be enabled for this crate.");
+#[cfg(all(feature = "device_client", feature = "edge_client",))]
+compile_error!("Either feature 'device_client' 'module_client' xor 'edge_client' feature must be enabled for this crate.");
 
-#[cfg(all(feature = "module_twin", feature = "edge_twin",))]
-compile_error!("Either feature 'device_twin' 'module_twin' xor 'edge_twin' feature must be enabled for this crate.");
+#[cfg(all(feature = "module_client", feature = "edge_client",))]
+compile_error!("Either feature 'device_client' 'module_client' xor 'edge_client' feature must be enabled for this crate.");
 
 pub use self::message::{Direction, IotMessage, IotMessageBuilder};
-#[cfg(feature = "device_twin")]
+#[cfg(feature = "device_client")]
 use self::twin::DeviceTwin;
 pub use self::twin::TwinType;
-#[cfg(any(feature = "module_twin", feature = "edge_twin"))]
+#[cfg(any(feature = "module_client", feature = "edge_client"))]
 use crate::client::twin::ModuleTwin;
 use crate::client::twin::Twin;
 use azure_iot_sdk_sys::*;
 use core::slice;
-#[cfg(any(feature = "module_twin", feature = "device_twin"))]
+#[cfg(any(feature = "module_client", feature = "device_client"))]
 use eis_utils::*;
 use log::{debug, error};
 use rand::Rng;
@@ -37,7 +37,7 @@ use std::ffi::{c_void, CStr, CString};
 use std::mem;
 use std::str;
 use std::sync::Once;
-#[cfg(any(feature = "module_twin", feature = "device_twin"))]
+#[cfg(any(feature = "module_client", feature = "device_client"))]
 use std::time::{Duration, SystemTime};
 
 /// crate wide shortcut for error type
@@ -51,7 +51,7 @@ mod twin;
 static mut IOTHUB_INIT_RESULT: i32 = -1;
 static IOTHUB_INIT_ONCE: Once = Once::new();
 
-#[cfg(any(feature = "module_twin", feature = "device_twin"))]
+#[cfg(any(feature = "module_client", feature = "device_client"))]
 macro_rules! days_to_secs {
     ($num_days:expr) => {
         $num_days * 24 * 60 * 60
@@ -285,18 +285,18 @@ impl IotHubClient {
     /// IotHubClient::get_twin_type();
     /// ```
     pub fn get_twin_type() -> TwinType {
-        #[cfg(feature = "device_twin")]
+        #[cfg(feature = "device_client")]
         return TwinType::Device;
 
-        #[cfg(feature = "module_twin")]
+        #[cfg(feature = "module_client")]
         return TwinType::Module;
 
-        #[cfg(feature = "edge_twin")]
+        #[cfg(feature = "edge_client")]
         return TwinType::Edge;
     }
 
     /// call this function in order to create an instance of [`IotHubClient`] from iotedge environment.
-    /// ***Note***: this feature is only available with "edge_twin" feature enabled.
+    /// ***Note***: this feature is only available with "edge_client" feature enabled.
     /// ```rust, no_run
     /// # use azure_iot_sdk::client::*;
     /// # struct MyEventHandler {}
@@ -305,7 +305,7 @@ impl IotHubClient {
     /// let event_handler = MyEventHandler{};
     /// let mut client = IotHubClient::from_edge_environment(event_handler).unwrap();
     /// ```
-    #[cfg(feature = "edge_twin")]
+    #[cfg(feature = "edge_client")]
     pub fn from_edge_environment(
         event_handler: impl EventHandler + 'static,
     ) -> Result<Box<Self>, IotError> {
@@ -326,7 +326,7 @@ impl IotHubClient {
     }
 
     /// call this function in order to create an instance of [`IotHubClient`] from iotedge environment.
-    /// ***Note***: this feature is only available with "edge_twin" feature enabled.
+    /// ***Note***: this feature is only available with "edge_client" feature enabled.
     /// ```rust, no_run
     /// # use azure_iot_sdk::client::*;
     /// # struct MyEventHandler {}
@@ -335,7 +335,7 @@ impl IotHubClient {
     /// let event_handler = MyEventHandler{};
     /// let mut client = IotHubClient::from_edge_environment(event_handler).unwrap();
     /// ```
-    #[cfg(not(feature = "edge_twin"))]
+    #[cfg(not(feature = "edge_client"))]
     pub fn from_edge_environment(
         _event_handler: impl EventHandler + 'static,
     ) -> Result<Box<Self>, IotError> {
@@ -354,7 +354,7 @@ impl IotHubClient {
     /// let event_handler = MyEventHandler{};
     /// let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
     /// ```
-    #[cfg(feature = "edge_twin")]
+    #[cfg(feature = "edge_client")]
     pub fn from_identity_service(
         _event_handler: impl EventHandler + 'static,
     ) -> Result<Box<Self>, IotError> {
@@ -373,7 +373,7 @@ impl IotHubClient {
     /// let event_handler = MyEventHandler{};
     /// let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
     /// ```
-    #[cfg(any(feature = "module_twin", feature = "device_twin"))]
+    #[cfg(any(feature = "module_client", feature = "device_client"))]
     pub fn from_identity_service(
         event_handler: impl EventHandler + 'static,
     ) -> Result<Box<Self>, IotError> {
@@ -383,7 +383,7 @@ impl IotHubClient {
                     .saturating_add(Duration::from_secs(days_to_secs!(30))),
             )
             .map_err(|err| {
-                if cfg!(device_twin) {
+                if cfg!(device_client) {
                     error!("iot identity service failed to create device twin identity.
                     In case you use TPM attestation please note that this combination is currently not supported.");
                 }
@@ -413,10 +413,10 @@ impl IotHubClient {
     ) -> Result<Box<Self>, IotError> {
         IotHubClient::iothub_init()?;
 
-        #[cfg(any(feature = "module_twin", feature = "edge_twin"))]
+        #[cfg(any(feature = "module_client", feature = "edge_client"))]
         let mut twin = Box::new(ModuleTwin::default());
 
-        #[cfg(feature = "device_twin")]
+        #[cfg(feature = "device_client")]
         let mut twin = Box::new(DeviceTwin::default());
 
         twin.create_from_connection_string(CString::new(connection_string.into())?)?;

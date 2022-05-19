@@ -17,8 +17,8 @@ log = "0.4"
 rand = "0.8"
 
 [features]
-# select either "module_twin", "edge_twin" or "device_twin" functionality
+# select either "module_client", "edge_client" or "device_client" functionality
 default = []
-device_twin = ["dep:eis-utils"]
-module_twin = ["dep:eis-utils"]
-edge_twin = ["azure-iot-sdk-sys/edge_support"]
+device_client = ["dep:eis-utils"]
+module_client = ["dep:eis-utils"]
+edge_client = ["azure-iot-sdk-sys/edge_modules"]

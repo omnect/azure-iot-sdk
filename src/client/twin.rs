@@ -4,14 +4,13 @@ use std::boxed::Box;
 use std::error::Error;
 use std::ffi::{c_void, CString};
 
-
-#[cfg(any(feature = "module_twin", feature = "edge_twin"))]
+#[cfg(any(feature = "module_client", feature = "edge_client"))]
 #[derive(Default, Debug)]
 pub struct ModuleTwin {
     handle: Option<IOTHUB_MODULE_CLIENT_LL_HANDLE>,
 }
 
-#[cfg(feature = "device_twin")]
+#[cfg(feature = "device_client")]
 #[derive(Default, Debug)]
 pub struct DeviceTwin {
     handle: Option<IOTHUB_DEVICE_CLIENT_LL_HANDLE>,
@@ -83,7 +82,7 @@ pub trait Twin {
     ) -> Result<(), IotError>;
 }
 
-#[cfg(feature = "edge_twin")]
+#[cfg(feature = "edge_client")]
 impl ModuleTwin {
     pub(crate) fn create_from_edge_environment(&mut self) -> Result<(), IotError> {
         unsafe {
@@ -102,7 +101,7 @@ impl ModuleTwin {
     }
 }
 
-#[cfg(any(feature = "module_twin", feature = "edge_twin"))]
+#[cfg(any(feature = "module_client", feature = "edge_client"))]
 impl Twin for ModuleTwin {
     fn create_from_connection_string(
         &mut self,
@@ -295,7 +294,7 @@ impl Twin for ModuleTwin {
     }
 }
 
-#[cfg(feature = "device_twin")]
+#[cfg(feature = "device_client")]
 impl Twin for DeviceTwin {
     fn create_from_connection_string(
         &mut self,
