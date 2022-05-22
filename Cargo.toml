@@ -17,6 +17,6 @@ rand = "0.8"
 [features]
 # select either "module_client", "edge_client" or "device_client" functionality
 default = []
-device_client = ["dep:eis-utils"]
-module_client = ["dep:eis-utils"]
+device_client = ["eis-utils"]
+module_client = ["eis-utils"]
 edge_client = ["azure-iot-sdk-sys/edge_modules"]
