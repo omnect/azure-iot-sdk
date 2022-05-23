@@ -4,19 +4,23 @@ use std::boxed::Box;
 use std::error::Error;
 use std::ffi::{c_void, CString};
 
+#[cfg(any(feature = "module_client", feature = "edge_client"))]
 #[derive(Default, Debug)]
 pub struct ModuleTwin {
     handle: Option<IOTHUB_MODULE_CLIENT_LL_HANDLE>,
 }
 
+#[cfg(feature = "device_client")]
 #[derive(Default, Debug)]
 pub struct DeviceTwin {
     handle: Option<IOTHUB_DEVICE_CLIENT_LL_HANDLE>,
 }
 
 /// type of client twin
-#[derive(Debug)]
-pub enum TwinType {
+#[derive(Debug, PartialEq)]
+pub enum ClientType {
+    /// edge module twin client
+    Edge,
     /// module twin client
     Module,
     /// device twin client
@@ -78,6 +82,26 @@ pub trait Twin {
     ) -> Result<(), IotError>;
 }
 
+#[cfg(feature = "edge_client")]
+impl ModuleTwin {
+    pub(crate) fn create_from_edge_environment(&mut self) -> Result<(), IotError> {
+        unsafe {
+            let handle = IoTHubModuleClient_LL_CreateFromEnvironment(Some(MQTT_Protocol));
+
+            if handle.is_null() {
+                return Err(Box::<dyn Error + Send + Sync>::from(
+                    "error while calling IoTHubModuleClient_LL_CreateFromEnvironment()",
+                ));
+            }
+
+            self.handle = Some(handle);
+
+            Ok(())
+        }
+    }
+}
+
+#[cfg(any(feature = "module_client", feature = "edge_client"))]
 impl Twin for ModuleTwin {
     fn create_from_connection_string(
         &mut self,
@@ -270,6 +294,7 @@ impl Twin for ModuleTwin {
     }
 }
 
+#[cfg(feature = "device_client")]
 impl Twin for DeviceTwin {
     fn create_from_connection_string(
         &mut self,
