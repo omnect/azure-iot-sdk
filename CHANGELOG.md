@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.3] Q3 2022
+ - bump to azure-iot-sdk-sys 0.5.1
+
 ## [0.8.2] Q3 2022
  - bump to azure-iot-sdk-sys 0.5.0
 
@@ -32,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - bumped to eis-utils 0.2.2
 
 ## [0.5.3] Q1 2022
- - added Cargo.audit.ignore 
+ - added Cargo.audit.ignore
  - bumped to azure-iot-sdk-sys 0.2.2
 
 ## [0.5.2] Q1 2022
@@ -47,10 +50,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - refactoring due to support device twins besides module twins
 
 ## [0.4.1] Q1 2022
- - handle connection status 
+ - handle connection status
 
 ## [0.4.0] Q1 2022
- - add D2C messages 
+ - add D2C messages
 
 ## [0.3.0] Q1 2022
  - introduced object oriented interface
