@@ -2,7 +2,7 @@ use crate::client::IotError;
 use azure_iot_sdk_sys::*;
 use std::boxed::Box;
 use std::error::Error;
-use std::ffi::{c_void, CString};
+use std::ffi::{c_void, CStr, CString};
 
 #[cfg(any(feature = "module_client", feature = "edge_client"))]
 #[derive(Default, Debug)]
@@ -25,6 +25,21 @@ pub enum ClientType {
     Module,
     /// device twin client
     Device,
+}
+
+pub(crate) fn get_sdk_version_string() -> String {
+    unsafe {
+        let version_string = IoTHubClient_GetVersionString();
+
+        if version_string.is_null() {
+            return String::from("unknwon azure-sdk-c version string");
+        }
+
+        CStr::from_ptr(version_string)
+            .to_str()
+            .unwrap_or("invalid azure-sdk-c version string")
+            .to_owned()
+    }
 }
 
 pub trait Twin {
