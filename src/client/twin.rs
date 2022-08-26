@@ -32,7 +32,7 @@ pub(crate) fn get_sdk_version_string() -> String {
         let version_string = IoTHubClient_GetVersionString();
 
         if version_string.is_null() {
-            return String::from("unknwon azure-sdk-c version string");
+            return String::from("unknown azure-sdk-c version string");
         }
 
         CStr::from_ptr(version_string)
