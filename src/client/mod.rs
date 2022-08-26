@@ -278,7 +278,19 @@ pub struct IotHubClient {
     event_handler: Box<dyn EventHandler>,
 }
 
+unsafe impl Send for IotHubClient {}
+
 impl IotHubClient {
+    /// call this function in order to get the used azure-sdk-c version string.
+    /// ```rust, no_run
+    /// # use azure_iot_sdk::client::*;
+    /// #
+    /// IotHubClient::get_sdk_version_string();
+    /// ```
+    pub fn get_sdk_version_string() -> String {
+        twin::get_sdk_version_string()
+    }
+
     /// call this function in order to get the configured [`ClientType`] feature.
     /// ```rust, no_run
     /// # use azure_iot_sdk::client::*;
@@ -367,6 +379,11 @@ impl IotHubClient {
 
                 err
             })?;
+
+            debug!(
+                "used con_str: {}",
+                connection_info.connection_string.as_str()
+            );
 
             IotHubClient::from_connection_string(
                 connection_info.connection_string.as_str(),

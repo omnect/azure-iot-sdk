@@ -1,6 +1,6 @@
 [package]
 name = "azure-iot-sdk"
-version = "0.8.3"
+version = "0.8.4"
 edition = "2021"
 authors = ["Joerg Zeidler <joerg.zeidler@conplement.de>", "Jan Zachmann <jan.zachmann@conplement.de>"]
 repository = "git@github.com:ICS-DeviceManagement/azure-iot-sdk.git"
@@ -8,7 +8,7 @@ repository = "git@github.com:ICS-DeviceManagement/azure-iot-sdk.git"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-azure-iot-sdk-sys = { git = "ssh://git@github.com/ICS-DeviceManagement/azure-iot-sdk-sys.git", tag = "0.5.1", default-features = false }
+azure-iot-sdk-sys = { git = "ssh://git@github.com/ICS-DeviceManagement/azure-iot-sdk-sys.git", tag = "0.5.2", default-features = false }
 eis-utils = { git = "ssh://git@github.com/ICS-DeviceManagement/eis-utils.git", tag = "0.2.2", optional = true }
 serde_json = "1.0"
 log = "0.4"
