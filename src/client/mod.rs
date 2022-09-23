@@ -223,6 +223,13 @@ pub trait EventHandler {
         debug!("unhandled call to get_direct_methods().");
         None
     }
+
+    #[cfg(feature = "devicestreams")]
+    /// gets called if a devicestream is requested by iothub
+    fn handle_device_stream_request(
+        &self,
+        req: DEVICE_STREAM_C2D_REQUEST,
+    ) -> DEVICE_STREAM_C2D_RESPONSE;
 }
 
 /// iothub client to be instantiated in order to initiate iothub communication
@@ -426,7 +433,7 @@ impl IotHubClient {
         Ok(client)
     }
 
-    /// Let's you either create an outgoing D2C messages or parse an incoming cloud to device (C2D) messages.
+    /// Let's you either create an outgoing D2C message or parse an incoming cloud to device (C2D) message.
     /// ```rust, no_run
     /// # use azure_iot_sdk::client::*;
     /// # struct MyEventHandler {}
@@ -571,7 +578,14 @@ impl IotHubClient {
         self.twin
             .get_twin_async(Some(IotHubClient::c_get_twin_async_callback), ctx)?;
         self.twin
-            .set_method_callback(Some(IotHubClient::c_direct_method_callback), ctx)
+            .set_method_callback(Some(IotHubClient::c_direct_method_callback), ctx)?;
+        #[cfg(feature = "devicestreams")]
+        self.twin.set_device_stream_c2d_request_callback(
+            Some(IotHubClient::c_device_stream_c2d_request_callback),
+            ctx,
+        )?;
+
+        Ok(())
     }
 
     unsafe extern "C" fn c_connection_status_callback(
@@ -826,6 +840,18 @@ impl IotHubClient {
             "Received confirmation from iothub for event with internal id: {} and status: {}",
             ctx as u32, status
         );
+    }
+
+    #[cfg(feature = "devicestreams")]
+    unsafe extern "C" fn c_device_stream_c2d_request_callback(
+        sr: *const DEVICE_STREAM_C2D_REQUEST,
+        ctx: *mut std::ffi::c_void,
+    ) -> *mut DEVICE_STREAM_C2D_RESPONSE {
+        // get self
+        let client = &mut *(ctx as *mut IotHubClient);
+        let response = client.event_handler.handle_device_stream_request(*sr);
+        let res = Box::into_raw(Box::new(response));
+        return res;
     }
 }
 

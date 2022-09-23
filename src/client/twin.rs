@@ -95,6 +95,13 @@ pub trait Twin {
         callback: IOTHUB_CLIENT_DEVICE_METHOD_CALLBACK_ASYNC,
         ctx: *mut std::ffi::c_void,
     ) -> Result<(), IotError>;
+
+    #[cfg(feature = "devicestreams")]
+    fn set_device_stream_c2d_request_callback(
+        &self,
+        callback: DEVICE_STREAM_C2D_REQUEST_CALLBACK,
+        ctx: *mut std::ffi::c_void,
+    ) -> Result<(), IotError>;
 }
 
 #[cfg(feature = "edge_client")]
@@ -307,6 +314,17 @@ impl Twin for ModuleTwin {
             Ok(())
         }
     }
+
+    #[cfg(feature = "devicestreams")]
+    fn set_device_stream_c2d_request_callback(
+        &self,
+        _callback: DEVICE_STREAM_C2D_REQUEST_CALLBACK,
+        _ctx: *mut std::ffi::c_void,
+    ) -> Result<(), IotError> {
+        return Err(Box::<dyn Error + Send + Sync>::from(
+            "not implemented for ModuleTwin",
+        ));
+    }
 }
 
 #[cfg(feature = "device_client")]
@@ -487,6 +505,29 @@ impl Twin for DeviceTwin {
             {
                 return Err(Box::<dyn Error + Send + Sync>::from(
                     "error while calling IoTHubDeviceClient_LL_SetDeviceMethodCallback()",
+                ));
+            }
+
+            Ok(())
+        }
+    }
+
+    #[cfg(feature = "devicestreams")]
+    fn set_device_stream_c2d_request_callback(
+        &self,
+        callback: DEVICE_STREAM_C2D_REQUEST_CALLBACK,
+        ctx: *mut std::ffi::c_void,
+    ) -> Result<(), IotError> {
+        unsafe {
+            if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
+                != IoTHubDeviceClient_LL_SetStreamRequestCallback(
+                    self.handle.unwrap(),
+                    callback,
+                    ctx,
+                )
+            {
+                return Err(Box::<dyn Error + Send + Sync>::from(
+                    "error while calling IoTHubDeviceClient_LL_SetStreamRequestCallback()",
                 ));
             }
 
