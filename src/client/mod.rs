@@ -49,6 +49,32 @@ mod message;
 /// client implementation, either device, module or edge
 mod twin;
 
+/// type DeviceStreamRequest
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct DeviceStreamRequest {
+    /// name of the stream
+    pub name: String,
+    /// websocket url
+    pub url: String,
+    /// auth bearer token
+    pub authorization_token: String,
+    /// request id used to corelate DeviceStreamRequest and DeviceStreamResonse
+    pub request_id: String,
+}
+//pub type DeviceStreamRequest = DEVICE_STREAM_C2D_REQUEST;
+
+/// type DeviceStreamResponse
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct DeviceStreamResponse {
+    /// stream is accepted and could be established
+    pub accept: bool,
+    /// request id used to corelate DeviceStreamRequest and DeviceStreamResonse
+    pub request_id: String,
+}
+//pub type DeviceStreamResponse = DEVICE_STREAM_C2D_RESPONSE;
+
 static mut IOTHUB_INIT_RESULT: i32 = -1;
 static IOTHUB_INIT_ONCE: Once = Once::new();
 
@@ -226,10 +252,13 @@ pub trait EventHandler {
 
     #[cfg(feature = "devicestreams")]
     /// gets called if a devicestream is requested by iothub
-    fn handle_device_stream_request(
-        &self,
-        req: DEVICE_STREAM_C2D_REQUEST,
-    ) -> DEVICE_STREAM_C2D_RESPONSE;
+    fn handle_device_stream_request(&mut self, req: DeviceStreamRequest) -> DeviceStreamResponse {
+        error!("default implementation doesn't accept incoming device stream requests.");
+        DeviceStreamResponse {
+            accept: false,
+            request_id: req.request_id,
+        }
+    }
 }
 
 /// iothub client to be instantiated in order to initiate iothub communication
@@ -849,7 +878,24 @@ impl IotHubClient {
     ) -> *mut DEVICE_STREAM_C2D_RESPONSE {
         // get self
         let client = &mut *(ctx as *mut IotHubClient);
-        let response = client.event_handler.handle_device_stream_request(*sr);
+        let request = DeviceStreamRequest {
+            name: CStr::from_ptr((*sr).name).to_str().unwrap().to_owned(),
+            url: CStr::from_ptr((*sr).url).to_str().unwrap().to_owned(),
+            authorization_token: CStr::from_ptr((*sr).authorization_token)
+                .to_str()
+                .unwrap()
+                .to_owned(),
+            request_id: CStr::from_ptr((*sr).request_id)
+                .to_str()
+                .unwrap()
+                .to_owned(),
+        };
+        let response = client.event_handler.handle_device_stream_request(request);
+
+        let response = DEVICE_STREAM_C2D_RESPONSE {
+            accept: response.accept,
+            request_id: (*sr).request_id,
+        };
         let res = Box::into_raw(Box::new(response));
         return res;
     }
