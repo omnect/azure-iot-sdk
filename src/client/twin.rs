@@ -129,7 +129,11 @@ impl Twin for ModuleTwin {
         &mut self,
         connection_info: &eis_utils::ConnectionInfo,
     ) -> Result<(), IotError> {
-        // todo Error when connection_info includes device identity info
+        if eis_utils::ConnType::Module != connection_info.conn_type {
+            return Err(Box::<dyn Error + Send + Sync>::from(
+                "client is build for provisioning with module identity, but runtime is configured with \"{connection_info.conn_type}\"",
+            ));
+        }
         unsafe {
             let handle = IoTHubModuleClient_LL_CreateFromConnectionString(
                 CString::new(connection_info.connection_string.clone())?.into_raw(),
@@ -348,7 +352,11 @@ impl Twin for DeviceTwin {
         &mut self,
         connection_info: &eis_utils::ConnectionInfo,
     ) -> Result<(), IotError> {
-        // todo Error when connection_info includes device identity info
+        if eis_utils::ConnType::Device != connection_info.conn_type {
+            return Err(Box::<dyn Error + Send + Sync>::from(
+                "client is build for provisioning with device identity, but runtime is configured with \"{connection_info.conn_type}\"",
+            ));
+        }
         unsafe {
             let handle = IoTHubDeviceClient_LL_CreateFromConnectionString(
                 CString::new(connection_info.connection_string.clone())?.into_raw(),
@@ -362,6 +370,11 @@ impl Twin for DeviceTwin {
             }
 
             if eis_utils::AuthType::SASCert == connection_info.auth_type {
+                log::debug!(
+                    "cert: {}\r\nkey: {}",
+                    std::str::from_utf8(&connection_info.certificate_string)?,
+                    connection_info.openssl_private_key
+                );
                 // I was not able to use OPTION_X509_CERT and OPTION_X509_PRIVATE_KEY as parameters
                 // We should revisit how to correctly cast these.
                 if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
