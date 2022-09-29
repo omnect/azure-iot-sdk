@@ -43,6 +43,12 @@ pub(crate) fn get_sdk_version_string() -> String {
 }
 
 pub trait Twin {
+    #[cfg(any(feature = "module_client", feature = "device_client"))]
+    fn create_from_connection_info(
+        &mut self,
+        connection_info: &eis_utils::ConnectionInfo,
+    ) -> Result<(), IotError>;
+
     fn create_from_connection_string(&mut self, connection_string: CString)
         -> Result<(), IotError>;
 
@@ -118,6 +124,33 @@ impl ModuleTwin {
 
 #[cfg(any(feature = "module_client", feature = "edge_client"))]
 impl Twin for ModuleTwin {
+    #[cfg(any(feature = "module_client"))]
+    fn create_from_connection_info(
+        &mut self,
+        connection_info: &eis_utils::ConnectionInfo,
+    ) -> Result<(), IotError> {
+        // todo Error when connection_info includes device identity info
+        unsafe {
+            let handle = IoTHubModuleClient_LL_CreateFromConnectionString(
+                CString::new(connection_info.connection_string.clone())?.into_raw(),
+                Some(MQTT_Protocol),
+            );
+
+            if handle.is_null() {
+                return Err(Box::<dyn Error + Send + Sync>::from(
+                    "error while calling IoTHubModuleClient_LL_CreateFromConnectionString()",
+                ));
+            }
+
+            self.handle = Some(handle);
+
+            // currently not supported by iot-identity-service for module twin, but it's planned:
+            // x509
+
+            Ok(())
+        }
+    }
+
     fn create_from_connection_string(
         &mut self,
         connection_string: CString,
@@ -311,6 +344,55 @@ impl Twin for ModuleTwin {
 
 #[cfg(feature = "device_client")]
 impl Twin for DeviceTwin {
+    fn create_from_connection_info(
+        &mut self,
+        connection_info: &eis_utils::ConnectionInfo,
+    ) -> Result<(), IotError> {
+        // todo Error when connection_info includes device identity info
+        unsafe {
+            let handle = IoTHubDeviceClient_LL_CreateFromConnectionString(
+                CString::new(connection_info.connection_string.clone())?.into_raw(),
+                Some(MQTT_Protocol),
+            );
+
+            if handle.is_null() {
+                return Err(Box::<dyn Error + Send + Sync>::from(
+                    "error while calling IoTHubDeviceClient_LL_CreateFromConnectionString()",
+                ));
+            }
+
+            if eis_utils::AuthType::SASCert == connection_info.auth_type {
+                // I was not able to use OPTION_X509_CERT and OPTION_X509_PRIVATE_KEY as parameters
+                // We should revisit how to correctly cast these.
+                if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
+                    != IoTHubDeviceClient_LL_SetOption(
+                        handle,
+                        CString::new("x509certificate")?.into_raw()
+                            as *const ::std::os::raw::c_char,
+                        CString::new(connection_info.certificate_string.clone())?.into_raw()
+                            as *const c_void,
+                    )
+                    || IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
+                        != IoTHubDeviceClient_LL_SetOption(
+                            handle,
+                            CString::new("x509privatekey")?.into_raw()
+                                as *const ::std::os::raw::c_char,
+                            CString::new(connection_info.openssl_private_key.clone())?.into_raw()
+                                as *const c_void,
+                        )
+                {
+                    return Err(Box::<dyn Error + Send + Sync>::from(
+                        "error while setting x509 cert and key on IotHubClient handle",
+                    ));
+                }
+            }
+
+            self.handle = Some(handle);
+
+            Ok(())
+        }
+    }
+
     fn create_from_connection_string(
         &mut self,
         connection_string: CString,

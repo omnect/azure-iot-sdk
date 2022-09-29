@@ -385,10 +385,7 @@ impl IotHubClient {
                 connection_info.connection_string.as_str()
             );
 
-            IotHubClient::from_connection_string(
-                connection_info.connection_string.as_str(),
-                _event_handler,
-            )
+            IotHubClient::from_connection_info(&connection_info, _event_handler)
         }
     }
 
@@ -415,6 +412,31 @@ impl IotHubClient {
         let mut twin = Box::new(DeviceTwin::default());
 
         twin.create_from_connection_string(CString::new(connection_string.into())?)?;
+
+        let mut client = Box::new(IotHubClient {
+            twin,
+            event_handler: Box::new(event_handler),
+        });
+
+        client.set_callbacks()?;
+
+        Ok(client)
+    }
+
+    #[cfg(any(feature = "module_client", feature = "device_client"))]
+    fn from_connection_info(
+        connection_info: &eis_utils::ConnectionInfo,
+        event_handler: impl EventHandler + 'static,
+    ) -> Result<Box<Self>, IotError> {
+        IotHubClient::iothub_init()?;
+
+        #[cfg(any(feature = "module_client", feature = "edge_client"))]
+        let mut twin = Box::new(ModuleTwin::default());
+
+        #[cfg(feature = "device_client")]
+        let mut twin = Box::new(DeviceTwin::default());
+
+        twin.create_from_connection_info(connection_info)?;
 
         let mut client = Box::new(IotHubClient {
             twin,
