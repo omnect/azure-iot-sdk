@@ -375,6 +375,30 @@ impl Twin for DeviceTwin {
                     std::str::from_utf8(&connection_info.certificate_string)?,
                     connection_info.openssl_private_key
                 );
+
+                //we have to load the default provider when using openssl 3
+                //we introduce a hard dependency to openssl 3 here since there functions are not
+                //available in openssl 1.1.1
+                if OSSL_PROVIDER_try_load(
+                    std::ptr::null_mut(),
+                    CString::new("legacy")?.into_raw(),
+                    true as _,
+                )
+                .as_ref()
+                .is_none()
+                    || OSSL_PROVIDER_try_load(
+                        std::ptr::null_mut(),
+                        CString::new("default")?.into_raw(),
+                        true as _,
+                    )
+                    .as_ref()
+                    .is_none()
+                {
+                    return Err(Box::<dyn Error + Send + Sync>::from(
+                        "error while setting default openssl provider",
+                    ));
+                }
+
                 // I was not able to use OPTION_X509_* and OPTION_OPENSSL_* as parameters
                 // We should revisit how to correctly cast these.
                 if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
