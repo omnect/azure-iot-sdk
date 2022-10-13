@@ -375,16 +375,31 @@ impl Twin for DeviceTwin {
                     std::str::from_utf8(&connection_info.certificate_string)?,
                     connection_info.openssl_private_key
                 );
-                // I was not able to use OPTION_X509_CERT and OPTION_X509_PRIVATE_KEY as parameters
+                // I was not able to use OPTION_X509_* and OPTION_OPENSSL_* as parameters
                 // We should revisit how to correctly cast these.
                 if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                     != IoTHubDeviceClient_LL_SetOption(
                         handle,
-                        CString::new("x509certificate")?.into_raw()
-                            as *const ::std::os::raw::c_char,
-                        CString::new(connection_info.certificate_string.clone())?.into_raw()
-                            as *const c_void,
+                        CString::new("Engine")?.into_raw() as *const ::std::os::raw::c_char,
+                        CString::new("aziot_keys")?.into_raw() as *const ::std::os::raw::c_void,
                     )
+                    || IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
+                        != IoTHubDeviceClient_LL_SetOption(
+                            handle,
+                            CString::new("x509PrivatekeyType")?.into_raw()
+                                as *const ::std::os::raw::c_char,
+                            &OPTION_OPENSSL_KEY_TYPE_TAG_KEY_TYPE_ENGINE
+                                as *const ::std::os::raw::c_uint
+                                as *const ::std::os::raw::c_void,
+                        )
+                    || IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
+                        != IoTHubDeviceClient_LL_SetOption(
+                            handle,
+                            CString::new("x509certificate")?.into_raw()
+                                as *const ::std::os::raw::c_char,
+                            CString::new(connection_info.certificate_string.clone())?.into_raw()
+                                as *const c_void,
+                        )
                     || IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                         != IoTHubDeviceClient_LL_SetOption(
                             handle,

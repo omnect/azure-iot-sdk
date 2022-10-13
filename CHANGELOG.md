@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.0] Q3 2022
  - enabled provisioning as device identity with x509 certificates
  - return error when client is configured with wrong provisioning type
- - updated azure-iot-sdk-sys to 0.5.4
+ - updated azure-iot-sdk-sys to 0.5.5
 
 ## [0.8.4] Q3 2022
  - add get_sdk_version_string() API
