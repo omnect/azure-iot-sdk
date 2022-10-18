@@ -2,7 +2,7 @@
 
 //! Wrapper around azure iot-c-sdk-ref.
 //!
-//! A reference implementation can be found [here](https://github.com/ICS-DeviceManagement/iot-client-template-rs).//!
+//! A reference implementation can be found [here](https://github.com/omnect/iot-client-template-rs).//!
 //!
 //! Provides an abstraction over Microsoft's iot-c-sdk in order to develop device- and module twin client applications.
 //! All API's exposed by this crate base on the following low level function interfaces:

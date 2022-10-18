@@ -1,13 +1,13 @@
 # azure-iot-sdk
 
-This repository provides an object oriented wrapper of the rust unsafe bindings for the azure-iot-sdk from [azure-iot-sdk-sys](https://github.com/ICS-DeviceManagement/azure-iot-sdk-sys.git).
+This repository provides an object oriented wrapper of the rust unsafe bindings for the azure-iot-sdk from [azure-iot-sdk-sys](https://github.com/omnect/azure-iot-sdk-sys.git).
 
-A reference implementation showing how this framework might be used can be found [here](https://github.com/ICS-DeviceManagement/iot-client-template-rs).
+A reference implementation showing how this framework might be used can be found [here](https://github.com/omnect/iot-client-template-rs).
 
 # Build
 
 ## Dependencies
-Please refer to [azure-iot-sdk-sys](https://github.com/ICS-DeviceManagement/azure-iot-sdk-sys/blob/main/README.md) documentation in order to provide mandatory libraries needed to build azure-iot-sdk successfully.
+Please refer to [azure-iot-sdk-sys](https://github.com/omnect/azure-iot-sdk-sys/blob/main/README.md) documentation in order to provide mandatory libraries needed to build azure-iot-sdk successfully.
 
 An error output similar to the following example indicates that libraries are not set correctly:
 ```
