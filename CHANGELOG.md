@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.8.8] Q4 2022
  - bumped to eis-utils 0.2.5
+ - ignored RUSTSEC-2020-0071 introduced in eis-utils 0.2.4
 
 ## [0.8.7] Q4 2022
  - bumped to eis-utils 0.2.4
