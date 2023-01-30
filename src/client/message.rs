@@ -173,7 +173,7 @@ impl IotMessage {
                 };
 
                 if res != IOTHUB_MESSAGE_RESULT_TAG_IOTHUB_MESSAGE_OK {
-                    ("error while setting system property for key: {}", key);
+                    anyhow::bail!("error while setting system property for key: {}", key);
                 }
             }
 
