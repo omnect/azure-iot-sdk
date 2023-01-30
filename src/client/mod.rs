@@ -279,8 +279,6 @@ pub struct IotHubClient {
     event_handler: Box<dyn EventHandler>,
 }
 
-//unsafe impl Send for IotHubClient {}
-
 impl IotHubClient {
     /// call this function in order to get the used azure-sdk-c version string.
     /// ```rust, no_run
