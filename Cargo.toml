@@ -1,6 +1,6 @@
 [package]
 name = "azure-iot-sdk"
-version = "0.8.8"
+version = "0.9.0"
 edition = "2021"
 authors = ["Joerg Zeidler <joerg.zeidler@conplement.de>", "Jan Zachmann <jan.zachmann@conplement.de>"]
 repository = "git@github.com:omnect/azure-iot-sdk.git"
@@ -8,10 +8,11 @@ repository = "git@github.com:omnect/azure-iot-sdk.git"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-azure-iot-sdk-sys = { git = "ssh://git@github.com/omnect/azure-iot-sdk-sys.git", tag = "0.5.5", default-features = false }
+anyhow = "1.0"
+azure-iot-sdk-sys = { git = "ssh://git@github.com/omnect/azure-iot-sdk-sys.git", tag = "0.5.7", default-features = false }
 eis-utils = { git = "ssh://git@github.com/omnect/eis-utils.git", tag = "0.2.5", optional = true }
-serde_json = "1.0"
 log = "0.4"
+serde_json = "1.0"
 rand = "0.8"
 
 [features]

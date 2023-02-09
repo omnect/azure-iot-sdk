@@ -1,9 +1,7 @@
-use crate::client::IotError;
+use anyhow::Result;
 use azure_iot_sdk_sys::*;
 use log::{error, info};
-use std::boxed::Box;
 use std::collections::HashMap;
-use std::error::Error;
 use std::ffi::CStr;
 use std::ffi::{CString, NulError};
 use std::slice;
@@ -85,7 +83,7 @@ impl IotMessage {
     pub(crate) fn from_incoming_handle(
         handle: IOTHUB_MESSAGE_HANDLE,
         property_keys: Vec<CString>,
-    ) -> Result<Self, IotError> {
+    ) -> Result<Self> {
         unsafe {
             let mut buf_ptr: *const ::std::os::raw::c_uchar = std::ptr::null_mut();
             let mut buf_size: usize = 0;
@@ -147,7 +145,7 @@ impl IotMessage {
         }
     }
 
-    pub(crate) fn create_outgoing_handle(&mut self) -> Result<IOTHUB_MESSAGE_HANDLE, IotError> {
+    pub(crate) fn create_outgoing_handle(&mut self) -> Result<IOTHUB_MESSAGE_HANDLE> {
         assert_eq!(self.direction, Direction::Outgoing);
 
         self.destroy_handle();
@@ -156,9 +154,7 @@ impl IotMessage {
             let handle = IoTHubMessage_CreateFromByteArray(self.body.as_ptr(), self.body.len());
 
             if handle.is_null() {
-                return Err(Box::<dyn Error + Send + Sync>::from(
-                    "error while calling IoTHubMessage_CreateFromByteArray()",
-                ));
+                anyhow::bail!("error while calling IoTHubMessage_CreateFromByteArray()");
             }
 
             for (key, value) in &self.system_properties {
@@ -177,10 +173,7 @@ impl IotMessage {
                 };
 
                 if res != IOTHUB_MESSAGE_RESULT_TAG_IOTHUB_MESSAGE_OK {
-                    return Err(Box::<dyn Error + Send + Sync>::from(format!(
-                        "error while setting system property for key: {}",
-                        key
-                    )));
+                    anyhow::bail!("error while setting system property for key: {}", key);
                 }
             }
 
@@ -188,11 +181,11 @@ impl IotMessage {
                 if IOTHUB_MESSAGE_RESULT_TAG_IOTHUB_MESSAGE_OK
                     != IoTHubMessage_SetProperty(handle, key.as_ptr(), value.as_ptr())
                 {
-                    return Err(Box::<dyn Error + Send + Sync>::from(format!(
+                    anyhow::bail!(
                         "error while setting property for: {}, {}",
                         key.to_str()?,
                         value.to_str()?
-                    )));
+                    );
                 }
             }
 
@@ -295,7 +288,7 @@ impl IotMessageBuilder {
     /// # use azure_iot_sdk::client::*;
     /// # struct MyEventHandler {}
     /// # impl EventHandler for MyEventHandler {}
-    /// 
+    ///
     /// # let event_handler = MyEventHandler{};
     /// # let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
     /// #
@@ -397,7 +390,7 @@ impl IotMessageBuilder {
     }
 
     /// Build into a message instance
-    pub fn build(self) -> Result<IotMessage, IotError> {
+    pub fn build(self) -> Result<IotMessage> {
         Ok(IotMessage {
             handle: None,
             body: self.message.unwrap(),
