@@ -45,7 +45,7 @@ impl Default for Direction {
 ///
 /// client.send_d2c_message(msg);
 /// ```
-#[derive(Default, Debug)]
+#[derive(Default, Debug, PartialEq)]
 pub struct IotMessage {
     handle: Option<IOTHUB_MESSAGE_HANDLE>,
     /// message body

@@ -1,6 +1,6 @@
 [package]
 name = "azure-iot-sdk"
-version = "0.9.0"
+version = "0.9.1"
 edition = "2021"
 authors = ["Joerg Zeidler <joerg.zeidler@conplement.de>", "Jan Zachmann <jan.zachmann@conplement.de>"]
 repository = "git@github.com:omnect/azure-iot-sdk.git"
