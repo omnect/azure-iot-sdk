@@ -2,7 +2,7 @@
 name = "azure-iot-sdk"
 version = "0.9.1"
 edition = "2021"
-authors = ["Joerg Zeidler <joerg.zeidler@conplement.de>", "Jan Zachmann <jan.zachmann@conplement.de>"]
+authors = ["omnect@conplement.de>"]
 repository = "git@github.com:omnect/azure-iot-sdk.git"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

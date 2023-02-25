@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.1] Q1 2023
  - added PartialEq trait to support better testability
+ - prepared readme for open sourcing repository
 
 ## [0.9.0] Q1 2023
  - switched to anyhow based errors
