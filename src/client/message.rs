@@ -95,7 +95,7 @@ impl IotMessage {
                         error!("IoTHubMessage_GetByteArray: received invalid body pointer");
                         Vec::new()
                     } else {
-                        slice::from_raw_parts(buf_ptr, buf_size as usize).to_vec()
+                        slice::from_raw_parts(buf_ptr, buf_size).to_vec()
                     }
                 }
                 _ => {
@@ -105,7 +105,7 @@ impl IotMessage {
             };
 
             let mut add_system_property = |key, value: *const ::std::os::raw::c_char| {
-                if value.is_null() == false {
+                if !value.is_null() {
                     system_properties.insert(key, CStr::from_ptr(value).to_owned());
                 }
             };
