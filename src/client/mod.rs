@@ -327,7 +327,7 @@ impl IotHubClient {
         {
             IotHubClient::iothub_init()?;
 
-            let mut twin = Box::new(ModuleTwin::default());
+            let mut twin = Box::<ModuleTwin>::default();
 
             twin.create_from_edge_environment()?;
 
@@ -404,10 +404,10 @@ impl IotHubClient {
         IotHubClient::iothub_init()?;
 
         #[cfg(any(feature = "module_client", feature = "edge_client"))]
-        let mut twin = Box::new(ModuleTwin::default());
+        let mut twin = Box::<ModuleTwin>::default();
 
         #[cfg(feature = "device_client")]
-        let mut twin = Box::new(DeviceTwin::default());
+        let mut twin = Box::<DeviceTwin>::default();
 
         twin.create_from_connection_string(CString::new(connection_string.into())?)?;
 
@@ -530,7 +530,7 @@ impl IotHubClient {
     ///
     /// dmm.insert(String::from("closure"), dm);
     /// ```
-    pub fn make_direct_method<'a, F>(f: F) -> DirectMethod
+    pub fn make_direct_method<F>(f: F) -> DirectMethod
     where
         F: Fn(serde_json::Value) -> Result<Option<serde_json::Value>> + 'static + Send,
     {
