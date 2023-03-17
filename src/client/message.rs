@@ -7,19 +7,15 @@ use std::ffi::{CString, NulError};
 use std::slice;
 
 /// message direction
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Default, PartialEq)]
 pub enum Direction {
     /// incoming cloud to device (C2D) message
     Incoming,
     /// outgoing device to cloud (D2C) message
+    #[default]
     Outgoing,
 }
 
-impl Default for Direction {
-    fn default() -> Self {
-        Direction::Outgoing
-    }
-}
 /// Let's you either create an outgoing D2C messages or parse an incoming cloud to device (C2D) messages.
 /// ```rust, no_run
 /// # use azure_iot_sdk::client::*;
