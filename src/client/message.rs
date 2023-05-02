@@ -7,7 +7,7 @@ use std::ffi::{CString, NulError};
 use std::slice;
 
 /// message direction
-#[derive(Debug, Default, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub enum Direction {
     /// incoming cloud to device (C2D) message
     Incoming,
