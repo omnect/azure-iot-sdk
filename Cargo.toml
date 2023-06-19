@@ -1,6 +1,6 @@
 [package]
 name = "azure-iot-sdk"
-version = "0.9.4"
+version = "0.9.5"
 edition = "2021"
 authors = ["omnect@conplement.de>"]
 repository = "git@github.com:omnect/azure-iot-sdk.git"
@@ -9,8 +9,8 @@ repository = "git@github.com:omnect/azure-iot-sdk.git"
 
 [dependencies]
 anyhow = "1.0"
-azure-iot-sdk-sys = { git = "ssh://git@github.com/omnect/azure-iot-sdk-sys.git", tag = "0.5.8", default-features = false }
-eis-utils = { git = "ssh://git@github.com/omnect/eis-utils.git", tag = "0.2.6", optional = true }
+azure-iot-sdk-sys = { git = "https://github.com/omnect/azure-iot-sdk-sys.git", tag = "0.5.8", default-features = false }
+eis-utils = { git = "https://github.com/omnect/eis-utils.git", tag = "0.2.6", optional = true }
 log = "0.4"
 serde_json = "1.0"
 rand = "0.8"

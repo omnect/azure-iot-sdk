@@ -161,7 +161,7 @@ pub type DirectMethodMap = HashMap<String, DirectMethod>;
 ///         Ok(())
 ///     }
 ///
-///     fn get_c2d_message_property_keys(&self) -> Vec<&'static str> {
+///     fn c2d_message_property_keys(&self) -> Vec<&'static str> {
 ///         debug!("get message properties called");
 ///         vec![]
 ///     }
@@ -175,7 +175,7 @@ pub type DirectMethodMap = HashMap<String, DirectMethod>;
 ///         Ok(())
 ///     }
 ///
-///     fn get_direct_methods(&self) -> Option<&DirectMethodMap> {
+///     fn direct_methods(&self) -> Option<&DirectMethodMap> {
 ///         debug!("get direct methods called");
 ///         None
 ///     }
@@ -199,7 +199,7 @@ pub trait EventHandler {
 
     /// gets called in order to return [mqtt property keys](https://docs.microsoft.com/de-de/azure/iot-hub/iot-c-sdk-ref/iothub-message-h/iothubmessage-getproperty) to extracted from
     /// an iothub message
-    fn get_c2d_message_property_keys(&self) -> Vec<&'static str> {
+    fn c2d_message_property_keys(&self) -> Vec<&'static str> {
         vec![]
     }
 
@@ -219,8 +219,8 @@ pub trait EventHandler {
 
     /// gets called if a direct method was called by iothub.
     /// client implementation must return a map with implemented direct methods.
-    fn get_direct_methods(&self) -> Option<&DirectMethodMap> {
-        debug!("unhandled call to get_direct_methods().");
+    fn direct_methods(&self) -> Option<&DirectMethodMap> {
+        debug!("unhandled call to direct_methods().");
         None
     }
 }
@@ -244,7 +244,7 @@ pub trait EventHandler {
 ///         Ok(())
 ///     }
 ///
-///     fn get_c2d_message_property_keys(&self) -> Vec<&'static str> {
+///     fn c2d_message_property_keys(&self) -> Vec<&'static str> {
 ///         debug!("get message properties called");
 ///         vec![]
 ///     }
@@ -258,7 +258,7 @@ pub trait EventHandler {
 ///         Ok(())
 ///     }
 ///
-///     fn get_direct_methods(&self) -> Option<&DirectMethodMap> {
+///     fn direct_methods(&self) -> Option<&DirectMethodMap> {
 ///         debug!("get direct methods called");
 ///         None
 ///     }
@@ -284,19 +284,19 @@ impl IotHubClient {
     /// ```rust, no_run
     /// # use azure_iot_sdk::client::*;
     /// #
-    /// IotHubClient::get_sdk_version_string();
+    /// IotHubClient::sdk_version_string();
     /// ```
-    pub fn get_sdk_version_string() -> String {
-        twin::get_sdk_version_string()
+    pub fn sdk_version_string() -> String {
+        twin::sdk_version_string()
     }
 
     /// call this function in order to get the configured [`ClientType`] feature.
     /// ```rust, no_run
     /// # use azure_iot_sdk::client::*;
     /// #
-    /// IotHubClient::get_client_type();
+    /// IotHubClient::client_type();
     /// ```
-    pub fn get_client_type() -> ClientType {
+    pub fn client_type() -> ClientType {
         #[cfg(feature = "device_client")]
         return ClientType::Device;
 
@@ -562,7 +562,7 @@ impl IotHubClient {
         self.twin
             .set_twin_callback(Some(IotHubClient::c_desired_twin_callback), ctx)?;
         self.twin
-            .get_twin_async(Some(IotHubClient::c_get_twin_async_callback), ctx)?;
+            .twin_async(Some(IotHubClient::c_get_twin_async_callback), ctx)?;
         self.twin
             .set_method_callback(Some(IotHubClient::c_direct_method_callback), ctx)
     }
@@ -625,11 +625,7 @@ impl IotHubClient {
         let client = &mut *(ctx as *mut IotHubClient);
         let mut property_keys: Vec<CString> = vec![];
 
-        for p_str in client
-            .event_handler
-            .get_c2d_message_property_keys()
-            .into_iter()
-        {
+        for p_str in client.event_handler.c2d_message_property_keys().into_iter() {
             match CString::new(p_str) {
                 Ok(p_cstr) => property_keys.push(p_cstr),
                 Err(e) => {
@@ -749,7 +745,7 @@ impl IotHubClient {
 
         if let Some(method) = client
             .event_handler
-            .get_direct_methods()
+            .direct_methods()
             .and_then(|methods| (methods.get(method_name)))
         {
             let payload: serde_json::Value =
