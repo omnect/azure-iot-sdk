@@ -25,7 +25,7 @@ pub enum ClientType {
     Device,
 }
 
-pub(crate) fn get_sdk_version_string() -> String {
+pub(crate) fn sdk_version_string() -> String {
     unsafe {
         let version_string = IoTHubClient_GetVersionString();
 
@@ -81,7 +81,7 @@ pub trait Twin {
         ctx: *mut std::ffi::c_void,
     ) -> Result<()>;
 
-    fn get_twin_async(
+    fn twin_async(
         &self,
         callback: IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK,
         ctx: *mut std::ffi::c_void,
@@ -254,7 +254,7 @@ impl Twin for ModuleTwin {
         }
     }
 
-    fn get_twin_async(
+    fn twin_async(
         &self,
         callback: IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK,
         ctx: *mut std::ffi::c_void,
@@ -427,7 +427,7 @@ impl Twin for DeviceTwin {
         }
     }
 
-    fn get_twin_async(
+    fn twin_async(
         &self,
         callback: IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK,
         ctx: *mut std::ffi::c_void,
