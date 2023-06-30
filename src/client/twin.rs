@@ -5,13 +5,13 @@ use std::ffi::{c_void, CStr, CString};
 #[cfg(any(feature = "module_client", feature = "edge_client"))]
 #[derive(Default, Debug)]
 pub struct ModuleTwin {
-    handle: Option<IOTHUB_MODULE_CLIENT_LL_HANDLE>,
+    handle: Option<IOTHUB_MODULE_CLIENT_HANDLE>,
 }
 
 #[cfg(feature = "device_client")]
 #[derive(Default, Debug)]
 pub struct DeviceTwin {
-    handle: Option<IOTHUB_DEVICE_CLIENT_LL_HANDLE>,
+    handle: Option<IOTHUB_DEVICE_CLIENT_HANDLE>,
 }
 
 /// type of client twin
@@ -43,8 +43,6 @@ pub(crate) fn sdk_version_string() -> String {
 pub trait Twin {
     fn create_from_connection_string(&mut self, connection_string: CString) -> Result<()>;
 
-    fn do_work(&mut self);
-
     fn destroy(&mut self);
 
     fn send_event_to_output_async(
@@ -52,7 +50,7 @@ pub trait Twin {
         message_handle: IOTHUB_MESSAGE_HANDLE,
         queue: CString,
         callback: IOTHUB_CLIENT_EVENT_CONFIRMATION_CALLBACK,
-        ctx: u32,
+        ctx: *mut std::ffi::c_void,
     ) -> Result<()>;
 
     fn send_reported_state(
@@ -92,16 +90,22 @@ pub trait Twin {
         callback: IOTHUB_CLIENT_DEVICE_METHOD_CALLBACK_ASYNC,
         ctx: *mut std::ffi::c_void,
     ) -> Result<()>;
+
+    fn set_option(
+        &self,
+        option_name: CString,
+        value: *mut std::ffi::c_void,
+    ) -> Result<()>;
 }
 
 #[cfg(feature = "edge_client")]
 impl ModuleTwin {
     pub(crate) fn create_from_edge_environment(&mut self) -> Result<()> {
         unsafe {
-            let handle = IoTHubModuleClient_LL_CreateFromEnvironment(Some(MQTT_Protocol));
+            let handle = IoTHubModuleClient_CreateFromEnvironment(Some(MQTT_Protocol));
 
             if handle.is_null() {
-                anyhow::bail!("error while calling IoTHubModuleClient_LL_CreateFromEnvironment()",);
+                anyhow::bail!("error while calling IoTHubModuleClient_CreateFromEnvironment()",);
             }
 
             self.handle = Some(handle);
@@ -115,14 +119,14 @@ impl ModuleTwin {
 impl Twin for ModuleTwin {
     fn create_from_connection_string(&mut self, connection_string: CString) -> Result<()> {
         unsafe {
-            let handle = IoTHubModuleClient_LL_CreateFromConnectionString(
+            let handle = IoTHubModuleClient_CreateFromConnectionString(
                 connection_string.into_raw(),
                 Some(MQTT_Protocol),
             );
 
             if handle.is_null() {
                 anyhow::bail!(
-                    "error while calling IoTHubModuleClient_LL_CreateFromConnectionString()",
+                    "error while calling IoTHubModuleClient_CreateFromConnectionString()",
                 );
             }
 
@@ -132,15 +136,9 @@ impl Twin for ModuleTwin {
         }
     }
 
-    fn do_work(&mut self) {
-        unsafe {
-            IoTHubModuleClient_LL_DoWork(self.handle.unwrap());
-        }
-    }
-
     fn destroy(&mut self) {
         unsafe {
-            IoTHubModuleClient_LL_Destroy(self.handle.unwrap());
+            IoTHubModuleClient_Destroy(self.handle.unwrap());
         }
     }
 
@@ -149,11 +147,11 @@ impl Twin for ModuleTwin {
         message_handle: IOTHUB_MESSAGE_HANDLE,
         queue: CString,
         callback: IOTHUB_CLIENT_EVENT_CONFIRMATION_CALLBACK,
-        ctx: u32,
+        ctx: *mut std::ffi::c_void,
     ) -> Result<()> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
-                != IoTHubModuleClient_LL_SendEventToOutputAsync(
+                != IoTHubModuleClient_SendEventToOutputAsync(
                     self.handle.unwrap(),
                     message_handle,
                     queue.as_ptr(),
@@ -161,7 +159,7 @@ impl Twin for ModuleTwin {
                     ctx as *mut c_void,
                 )
             {
-                anyhow::bail!("error while calling IoTHubModuleClient_LL_SendEventToOutputAsync()",);
+                anyhow::bail!("error while calling IoTHubModuleClient_SendEventToOutputAsync()",);
             }
 
             Ok(())
@@ -177,7 +175,7 @@ impl Twin for ModuleTwin {
     ) -> Result<()> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
-                != IoTHubModuleClient_LL_SendReportedState(
+                != IoTHubModuleClient_SendReportedState(
                     self.handle.unwrap(),
                     reported_state.into_raw() as *mut u8,
                     size,
@@ -185,7 +183,7 @@ impl Twin for ModuleTwin {
                     ctx,
                 )
             {
-                anyhow::bail!("error while calling IoTHubModuleClient_LL_SendReportedState()",);
+                anyhow::bail!("error while calling IoTHubModuleClient_SendReportedState()",);
             }
 
             Ok(())
@@ -199,14 +197,14 @@ impl Twin for ModuleTwin {
     ) -> Result<()> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
-                != IoTHubModuleClient_LL_SetConnectionStatusCallback(
+                != IoTHubModuleClient_SetConnectionStatusCallback(
                     self.handle.unwrap(),
                     callback,
                     ctx,
                 )
             {
                 anyhow::bail!(
-                    "error while calling IoTHubModuleClient_LL_SetConnectionStatusCallback()",
+                    "error while calling IoTHubModuleClient_SetConnectionStatusCallback()",
                 );
             }
 
@@ -222,16 +220,14 @@ impl Twin for ModuleTwin {
         unsafe {
             let input_name = CString::new("input")?;
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
-                != IoTHubModuleClient_LL_SetInputMessageCallback(
+                != IoTHubModuleClient_SetInputMessageCallback(
                     self.handle.unwrap(),
                     input_name.as_ptr(),
                     callback,
                     ctx,
                 )
             {
-                anyhow::bail!(
-                    "error while calling IoTHubModuleClient_LL_SetInputMessageCallback()",
-                );
+                anyhow::bail!("error while calling IoTHubModuleClient_SetInputMessageCallback()",);
             }
 
             Ok(())
@@ -245,9 +241,9 @@ impl Twin for ModuleTwin {
     ) -> Result<()> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
-                != IoTHubModuleClient_LL_SetModuleTwinCallback(self.handle.unwrap(), callback, ctx)
+                != IoTHubModuleClient_SetModuleTwinCallback(self.handle.unwrap(), callback, ctx)
             {
-                anyhow::bail!("error while calling IoTHubModuleClient_LL_SetModuleTwinCallback()",);
+                anyhow::bail!("error while calling IoTHubModuleClient_SetModuleTwinCallback()",);
             }
 
             Ok(())
@@ -261,9 +257,9 @@ impl Twin for ModuleTwin {
     ) -> Result<()> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
-                != IoTHubModuleClient_LL_GetTwinAsync(self.handle.unwrap(), callback, ctx)
+                != IoTHubModuleClient_GetTwinAsync(self.handle.unwrap(), callback, ctx)
             {
-                anyhow::bail!("error while calling IoTHubModuleClient_LL_GetTwinAsync()",);
+                anyhow::bail!("error while calling IoTHubModuleClient_GetTwinAsync()",);
             }
 
             Ok(())
@@ -277,15 +273,25 @@ impl Twin for ModuleTwin {
     ) -> Result<()> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
-                != IoTHubModuleClient_LL_SetModuleMethodCallback(
-                    self.handle.unwrap(),
-                    callback,
-                    ctx,
-                )
+                != IoTHubModuleClient_SetModuleMethodCallback(self.handle.unwrap(), callback, ctx)
             {
-                anyhow::bail!(
-                    "error while calling IoTHubModuleClient_LL_SetModuleMethodCallback()",
-                );
+                anyhow::bail!("error while calling IoTHubModuleClient_SetModuleMethodCallback()",);
+            }
+
+            Ok(())
+        }
+    }
+
+    fn set_option(
+        &self,
+        option_name: CString,
+        value: *mut std::ffi::c_void,
+    ) -> Result<()>{
+        unsafe {
+            if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
+                != IoTHubModuleClient_SetOption(self.handle.unwrap(), option_name.into_raw(), value)
+            {
+                anyhow::bail!("error while calling IoTHubModuleClient_SetOption()",);
             }
 
             Ok(())
@@ -297,14 +303,14 @@ impl Twin for ModuleTwin {
 impl Twin for DeviceTwin {
     fn create_from_connection_string(&mut self, connection_string: CString) -> Result<()> {
         unsafe {
-            let handle = IoTHubDeviceClient_LL_CreateFromConnectionString(
+            let handle = IoTHubDeviceClient_CreateFromConnectionString(
                 connection_string.into_raw(),
                 Some(MQTT_Protocol),
             );
 
             if handle.is_null() {
                 anyhow::bail!(
-                    "error while calling IoTHubDeviceClient_LL_CreateFromConnectionString()",
+                    "error while calling IoTHubDeviceClient_CreateFromConnectionString()",
                 );
             }
 
@@ -314,15 +320,9 @@ impl Twin for DeviceTwin {
         }
     }
 
-    fn do_work(&mut self) {
-        unsafe {
-            IoTHubDeviceClient_LL_DoWork(self.handle.unwrap());
-        }
-    }
-
     fn destroy(&mut self) {
         unsafe {
-            IoTHubDeviceClient_LL_Destroy(self.handle.unwrap());
+            IoTHubDeviceClient_Destroy(self.handle.unwrap());
         }
     }
 
@@ -331,10 +331,10 @@ impl Twin for DeviceTwin {
         message_handle: IOTHUB_MESSAGE_HANDLE,
         _queue: CString,
         callback: IOTHUB_CLIENT_EVENT_CONFIRMATION_CALLBACK,
-        ctx: u32,
+        ctx: *mut std::ffi::c_void,
     ) -> Result<()> {
         unsafe {
-            let result = IoTHubDeviceClient_LL_SendEventAsync(
+            let result = IoTHubDeviceClient_SendEventAsync(
                 self.handle.unwrap(),
                 message_handle,
                 callback,
@@ -342,7 +342,7 @@ impl Twin for DeviceTwin {
             );
 
             if result != IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK {
-                anyhow::bail!("error while calling IoTHubDeviceClient_LL_SendEventAsync()",);
+                anyhow::bail!("error while calling IoTHubDeviceClient_SendEventAsync()",);
             }
 
             Ok(())
@@ -358,7 +358,7 @@ impl Twin for DeviceTwin {
     ) -> Result<()> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
-                != IoTHubDeviceClient_LL_SendReportedState(
+                != IoTHubDeviceClient_SendReportedState(
                     self.handle.unwrap(),
                     reported_state.into_raw() as *mut u8,
                     size,
@@ -366,7 +366,7 @@ impl Twin for DeviceTwin {
                     ctx,
                 )
             {
-                anyhow::bail!("error while calling IoTHubDeviceClient_LL_SendReportedState()",);
+                anyhow::bail!("error while calling IoTHubDeviceClient_SendReportedState()",);
             }
 
             Ok(())
@@ -380,14 +380,14 @@ impl Twin for DeviceTwin {
     ) -> Result<()> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
-                != IoTHubDeviceClient_LL_SetConnectionStatusCallback(
+                != IoTHubDeviceClient_SetConnectionStatusCallback(
                     self.handle.unwrap(),
                     callback,
                     ctx,
                 )
             {
                 anyhow::bail!(
-                    "error while calling IoTHubDeviceClient_LL_SetConnectionStatusCallback()",
+                    "error while calling IoTHubDeviceClient_SetConnectionStatusCallback()",
                 );
             }
 
@@ -402,9 +402,9 @@ impl Twin for DeviceTwin {
     ) -> Result<()> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
-                != IoTHubDeviceClient_LL_SetMessageCallback(self.handle.unwrap(), callback, ctx)
+                != IoTHubDeviceClient_SetMessageCallback(self.handle.unwrap(), callback, ctx)
             {
-                anyhow::bail!("error while calling IoTHubDeviceClient_LL_SetMessageCallback()",);
+                anyhow::bail!("error while calling IoTHubDeviceClient_SetMessageCallback()",);
             }
 
             Ok(())
@@ -418,9 +418,9 @@ impl Twin for DeviceTwin {
     ) -> Result<()> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
-                != IoTHubDeviceClient_LL_SetDeviceTwinCallback(self.handle.unwrap(), callback, ctx)
+                != IoTHubDeviceClient_SetDeviceTwinCallback(self.handle.unwrap(), callback, ctx)
             {
-                anyhow::bail!("error while calling IoTHubDeviceClient_LL_SetDeviceTwinCallback()",);
+                anyhow::bail!("error while calling IoTHubDeviceClient_SetDeviceTwinCallback()",);
             }
 
             Ok(())
@@ -434,9 +434,9 @@ impl Twin for DeviceTwin {
     ) -> Result<()> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
-                != IoTHubDeviceClient_LL_GetTwinAsync(self.handle.unwrap(), callback, ctx)
+                != IoTHubDeviceClient_GetTwinAsync(self.handle.unwrap(), callback, ctx)
             {
-                anyhow::bail!("error while calling IoTHubDeviceClient_LL_GetTwinAsync()",);
+                anyhow::bail!("error while calling IoTHubDeviceClient_GetTwinAsync()",);
             }
 
             Ok(())
@@ -450,15 +450,25 @@ impl Twin for DeviceTwin {
     ) -> Result<()> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
-                != IoTHubDeviceClient_LL_SetDeviceMethodCallback(
-                    self.handle.unwrap(),
-                    callback,
-                    ctx,
-                )
+                != IoTHubDeviceClient_SetDeviceMethodCallback(self.handle.unwrap(), callback, ctx)
             {
-                anyhow::bail!(
-                    "error while calling IoTHubDeviceClient_LL_SetDeviceMethodCallback()",
-                );
+                anyhow::bail!("error while calling IoTHubDeviceClient_SetDeviceMethodCallback()",);
+            }
+
+            Ok(())
+        }
+    }
+
+    fn set_option(
+        &self,
+        option_name: CString,
+        value: *mut std::ffi::c_void,
+    ) -> Result<()>{
+        unsafe {
+            if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
+                != IoTHubDeviceClient_SetOption(self.handle.unwrap(), option_name.into_raw(), value)
+            {
+                anyhow::bail!("error while calling IoTHubDeviceClient_SetOption()",);
             }
 
             Ok(())
