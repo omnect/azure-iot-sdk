@@ -485,7 +485,7 @@ impl IotHubClient {
     }
 
     fn set_options(&mut self) -> Result<()> {
-        if cfg!(feature = "trace_sdk_c") {
+        if cfg!(feature = "iot_c_sdk_logs") {
             self.twin.set_option(
                 CString::new("logtrace")?,
                 &mut true as *mut bool as *mut c_void,

@@ -26,4 +26,5 @@ default = []
 device_client = ["eis-utils"]
 module_client = ["eis-utils"]
 edge_client = ["azure-iot-sdk-sys/edge_modules"]
-trace_sdk_c = []
+# enable logging in azure_sdk_for_c
+iot_c_sdk_logs = []
