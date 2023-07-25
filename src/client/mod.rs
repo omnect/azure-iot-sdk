@@ -1,4 +1,4 @@
-//! Let's you create an instance of [`Self::IotHubClient`] with integrated [`Self::IotHubCallbacks`].
+//! Let's you create an instance of [`Self::IotHubClient`].
 
 #[cfg(not(any(
     feature = "device_client",
@@ -41,11 +41,6 @@ use std::{
 use tokio::sync::{
     Notify, {mpsc, oneshot},
 };
-
-/*
-check unwraps
-check send without network/confirmation
-*/
 
 /// used by iothub client consumer to send the result of a direct method
 pub type DirectMethodResult = oneshot::Sender<Result<Option<serde_json::Value>>>;

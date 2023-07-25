@@ -34,11 +34,11 @@ pub enum Direction {
 /// Let's you either create an outgoing D2C messages or parse an incoming cloud to device (C2D) messages.
 /// ```rust, no_run
 /// use azure_iot_sdk::client::*;
-/// 
+///
 /// #[tokio::main]
 /// async fn main() {
 ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
-/// 
+///
 ///     let msg = IotMessage::builder()
 ///         .set_body(
 ///             serde_json::to_vec(r#"{"my telemetry message": "hi from device"}"#).unwrap(),
@@ -203,7 +203,7 @@ impl IotMessage {
             self.handle = Some(handle);
         }
 
-        Ok(self.handle.unwrap())
+        Ok(self.handle.expect("no handle"))
     }
 
     fn destroy_handle(&mut self) {
@@ -220,11 +220,11 @@ impl IotMessage {
 /// Builder for constructing outgoing D2C message instances
 /// ```rust, no_run
 /// use azure_iot_sdk::client::*;
-/// 
+///
 /// #[tokio::main]
 /// async fn main() {
 ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
-/// 
+///
 ///     let msg = IotMessage::builder()
 ///         .set_body(
 ///             serde_json::to_vec(r#"{"my telemetry message": "hi from device"}"#).unwrap(),
@@ -254,11 +254,11 @@ impl IotMessageBuilder {
     /// Set the message body
     /// ```rust, no_run
     /// use azure_iot_sdk::client::*;
-    /// 
+    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
-    /// 
+    ///
     ///     let msg = IotMessage::builder()
     ///         .set_body(
     ///             serde_json::to_vec(r#"{"my telemetry message": "hi from device"}"#).unwrap(),
@@ -277,11 +277,11 @@ impl IotMessageBuilder {
     /// Set the identifier for this message
     /// ```rust, no_run
     /// use azure_iot_sdk::client::*;
-    /// 
+    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
-    /// 
+    ///
     ///     let msg = IotMessage::builder()
     ///         .set_id("my msg id")
     ///         .build()
@@ -301,7 +301,7 @@ impl IotMessageBuilder {
     /// #[tokio::main]
     /// async fn main() {
     ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
-    /// 
+    ///
     ///     let msg = IotMessage::builder()
     ///         .set_correlation_id("my correlation id")
     ///         .build()
@@ -318,11 +318,11 @@ impl IotMessageBuilder {
     /// To allow routing query on the message body, this value should be set to `application/json`
     /// ```rust, no_run
     /// use azure_iot_sdk::client::*;
-    /// 
+    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
-    /// 
+    ///
     ///     let msg = IotMessage::builder()
     ///         .set_content_type("application/json")
     ///         .build()
@@ -340,11 +340,11 @@ impl IotMessageBuilder {
     /// To allow routing query on the message body, this value should be set to `application/json`
     /// ```rust, no_run
     /// use azure_iot_sdk::client::*;
-    /// 
+    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
-    /// 
+    ///
     ///     let msg = IotMessage::builder()
     ///         .set_content_encoding("UTF-8")
     ///         .build()
@@ -360,11 +360,11 @@ impl IotMessageBuilder {
     /// Set the output queue to be used with this message
     /// ```rust, no_run
     /// use azure_iot_sdk::client::*;
-    /// 
+    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
-    /// 
+    ///
     ///     let msg = IotMessage::builder()
     ///         .set_output_queue("my output queue")
     ///         .build()
@@ -381,11 +381,11 @@ impl IotMessageBuilder {
     /// Add a message property
     /// ```rust, no_run
     /// use azure_iot_sdk::client::*;
-    /// 
+    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
-    /// 
+    ///
     ///     let msg = IotMessage::builder()
     ///         .set_property("my key1", "my property1")
     ///         .set_property("my key2", "my property2")
@@ -404,7 +404,7 @@ impl IotMessageBuilder {
     pub fn build(self) -> Result<IotMessage> {
         Ok(IotMessage {
             handle: None,
-            body: self.message.unwrap(),
+            body: self.message.expect("no message buffer"),
             direction: Direction::Outgoing,
             output_queue: CString::new(self.output_queue)?,
             properties: self
