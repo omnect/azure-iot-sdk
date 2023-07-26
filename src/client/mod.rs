@@ -1,5 +1,3 @@
-//! Let's you create an instance of [`Self::IotHubClient`].
-
 #[cfg(not(any(
     feature = "device_client",
     feature = "module_client",
@@ -42,40 +40,26 @@ use tokio::sync::{
     Notify, {mpsc, oneshot},
 };
 
-/// used by iothub client consumer to send the result of a direct method
+/// Result used by iothub client consumer to send the result of a direct method
 pub type DirectMethodResult = oneshot::Sender<Result<Option<serde_json::Value>>>;
-/// sender used to signal a direct method to the iothub client consumer
+/// Sender used to signal a direct method to the iothub client consumer
 pub type DirectMethodSender = mpsc::Sender<(String, serde_json::Value, DirectMethodResult)>;
 
 /// Trait which provides functions for communication with azure iothub
 #[async_trait(?Send)]
 pub trait IotHub {
-    /// call this function in order to get the used azure-sdk-c version string.
-    /// ```rust, no_run
-    /// use azure_iot_sdk::client::*;
-    ///
-    /// IotHubClient::sdk_version_string();
-    /// ```
+    /// Call this function in order to get the underlying azure-sdk-c version string.
     fn sdk_version_string() -> String
     where
         Self: Sized;
 
-    /// call this function in order to get the configured [`ClientType`] feature.
-    /// ```rust, no_run
-    /// use azure_iot_sdk::client::*;
-    ///
-    /// IotHubClient::client_type();
-    /// ```
+    /// Call this function to get the configured [`ClientType`].
     fn client_type() -> ClientType
     where
         Self: Sized;
 
-    /// call this function in order to create an instance of [`IotHubClient`] from iotedge environment.<br>
+    /// Call this function in order to create an instance of [`IotHubClient`] from iotedge environment.<br>
     /// ***Note***: this feature is only available with "edge_client" feature enabled.
-    /// ```rust, no_run
-    /// use azure_iot_sdk::client::*;
-    /// let mut client = IotHubClient::from_edge_environment(None, None, None, None).unwrap();
-    /// ```
     fn from_edge_environment(
         tx_connection_status: Option<mpsc::Sender<AuthenticationStatus>>,
         tx_twin_desired: Option<mpsc::Sender<(TwinUpdateState, serde_json::Value)>>,
@@ -85,16 +69,9 @@ pub trait IotHub {
     where
         Self: Sized;
 
-    /// call this function in order to create an instance of [`IotHubClient`] by using iot-identity-service.<br>
+    /// Call this function in order to create an instance of [`IotHubClient`] by using iot-identity-service.<br>
     /// ***Note1***: this feature is only available with "device_client" or "module_client" feature enabled.<br>
     /// ***Note2***: this feature is currently [not supported for all combinations of identity type and authentication mechanism](https://azure.github.io/iot-identity-service/develop-an-agent.html#connecting-your-agent-to-iot-hub).
-    /// ```rust, no_run
-    /// use azure_iot_sdk::client::*;
-    /// #[tokio::main]
-    /// async fn main() {
-    ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
-    /// }
-    /// ```
     async fn from_identity_service(
         _tx_connection_status: Option<mpsc::Sender<AuthenticationStatus>>,
         _tx_twin_desired: Option<mpsc::Sender<(TwinUpdateState, serde_json::Value)>>,
@@ -104,12 +81,7 @@ pub trait IotHub {
     where
         Self: Sized;
 
-    /// call this function in order to create an instance of [`IotHubClient`] by using a connection string.
-    /// ```rust, no_run
-    /// use azure_iot_sdk::client::*;
-    /// let con_str = "HostName=my-iothub.azure-devices.net;DeviceId=my-dev-id;SharedAccessKey=my-sas-key=";
-    /// let mut client = IotHubClient::from_connection_string(con_str, None, None, None, None).unwrap();
-    /// ```
+    /// Call this function in order to create an instance of [`IotHubClient`] by using a connection string.
     fn from_connection_string(
         connection_string: &str,
         tx_connection_status: Option<mpsc::Sender<AuthenticationStatus>>,
@@ -120,66 +92,13 @@ pub trait IotHub {
     where
         Self: Sized;
 
-    /// Triggers a twin update that is asynchronously signaled as twin_desired stream.
-    /// ```rust, no_run
-    /// use azure_iot_sdk::client::*;
-    /// use serde_json::json;
-    ///
-    /// #[tokio::main]
-    /// async fn main() {
-    ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
-    ///
-    ///     client.twin_async();
-    /// }
-    /// ```
+    /// Call this function to trigger a twin update that is asynchronously signaled as twin_desired stream.
     fn twin_async(&mut self) -> Result<()>;
 
-    /// Let's you either create an outgoing D2C messages or parse an incoming cloud to device (C2D) messages.
-    /// ```rust, no_run
-    /// use azure_iot_sdk::client::*;
-    ///
-    /// #[tokio::main]
-    /// async fn main() {
-    ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
-    ///
-    ///     let msg = IotMessage::builder()
-    ///         .set_body(
-    ///             serde_json::to_vec(r#"{"my telemetry message": "hi from device"}"#).unwrap(),
-    ///         )
-    ///         .set_id("my msg id")
-    ///         .set_correlation_id("my correleation id")
-    ///         .set_property(
-    ///             "my property key",
-    ///             "my property value",
-    ///         )
-    ///         .set_output_queue("my output queue")
-    ///         .build()
-    ///         .unwrap();
-    ///
-    ///     client.send_d2c_message(msg);
-    /// }
-    /// ```
+    /// Call this function to send a message (D2C) to iothub.
     async fn send_d2c_message(&mut self, mut message: IotMessage) -> Result<()>;
 
-    /// call this function in order to send a reported state update to iothub.
-    /// ```rust, no_run
-    /// use azure_iot_sdk::client::*;
-    /// use serde_json::json;
-    ///
-    /// #[tokio::main]
-    /// async fn main() {
-    ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
-    ///
-    ///     let reported = json!({
-    ///         "my_status": {
-    ///             "status": "ok",
-    ///             "timestamp": "2022-03-10",
-    ///         }
-    ///     });
-    ///
-    ///     client.twin_report(reported);
-    /// }
-    /// ```
+    /// Call this function to report twin properties to iothub.
     async fn twin_report(&mut self, reported: serde_json::Value) -> Result<()>;
 }
 
@@ -201,7 +120,7 @@ macro_rules! days_to_secs {
     };
 }
 
-/// indicates [type](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-devguide-module-twins#back-end-operations) of desired properties update
+/// Indicates [type](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-devguide-module-twins#back-end-operations) of desired properties update
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum TwinUpdateState {
     /// complete update of desired properties
@@ -210,7 +129,7 @@ pub enum TwinUpdateState {
     Partial = 1,
 }
 
-/// reason for unauthenticated connection result
+/// Reason for unauthenticated connection result
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum UnauthenticatedReason {
     /// SAS token expired
@@ -227,7 +146,7 @@ pub enum UnauthenticatedReason {
     CommunicationError,
 }
 
-/// authentication status as a result of establishing a connection
+/// Authentication status as a result of establishing a connection
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum AuthenticationStatus {
     /// authenticated successfully
@@ -236,25 +155,67 @@ pub enum AuthenticationStatus {
     Unauthenticated(UnauthenticatedReason),
 }
 
-/// provides a channel and a property array to receive incoming cloud to device messages
+/// Provides a channel and a property array to receive incoming cloud to device messages
 #[derive(Debug)]
 pub struct IncomingMessageObserver {
-    incoming_message_observer:
-        mpsc::Sender<(IotMessage, oneshot::Sender<Result<DispositionResult>>)>,
+    observer: mpsc::Sender<(IotMessage, oneshot::Sender<Result<DispositionResult>>)>,
     properties: Vec<String>,
+}
+
+impl IncomingMessageObserver {
+    /// Creates a new instance of [`IncomingMessageObserver`]
+    pub fn new(
+        observer: mpsc::Sender<(IotMessage, oneshot::Sender<Result<DispositionResult>>)>,
+        properties: Vec<String>,
+    ) -> Self {
+        IncomingMessageObserver {
+            observer,
+            properties,
+        }
+    }
 }
 
 /// iothub client to be instantiated in order to initiate iothub communication
 /// ```no_run
 /// use azure_iot_sdk::client::*;
 /// use std::{thread, time};
+/// use tokio::{select, sync::mpsc};
 ///
 /// #[tokio::main]
 /// async fn main() {
-///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
+///     let (tx_connection_status, mut rx_connection_status) = mpsc::channel(100);
+///     let (tx_twin_desired, mut rx_twin_desired) = mpsc::channel(100);
+///     let (tx_direct_method, mut rx_direct_method) = mpsc::channel(100);
+///     let (tx_incoming_message, mut rx_incoming_message) = mpsc::channel(100);
+///
+///     let mut client = IotHubClient::from_identity_service(
+///         Some(tx_connection_status),
+///         Some(tx_twin_desired),
+///         Some(tx_direct_method),
+///         Some(IncomingMessageObserver::new(tx_incoming_message, vec![])),
+///     )
+///     .await
+///     .unwrap();
 ///
 ///     loop {
-///         thread::sleep(time::Duration::from_millis(100));
+///         select! (
+///             status = rx_connection_status.recv() => {
+///                 // handle connection status;
+///                 // ...
+///             },
+///             status = rx_twin_desired.recv() => {
+///                 // handle twin desired properties;
+///                 // ...
+///             },
+///             status = rx_direct_method.recv() => {
+///                 // handle direct method calls;
+///                 // ...
+///             },
+///             status = rx_incoming_message.recv() => {
+///                 // handle cloud to device messages;
+///                 // ...
+///             },
+///         )
 ///     }
 /// }
 /// ```
@@ -268,10 +229,22 @@ pub struct IotHubClient {
 
 #[async_trait(?Send)]
 impl IotHub for IotHubClient {
+    /// Call this function in order to get the underlying azure-sdk-c version string.
+    /// ```rust, no_run
+    /// use azure_iot_sdk::client::*;
+    ///
+    /// IotHubClient::sdk_version_string();
+    /// ```
     fn sdk_version_string() -> String {
         twin::sdk_version_string()
     }
 
+    /// Call this function to get the configured [`ClientType`].
+    /// ```rust, no_run
+    /// use azure_iot_sdk::client::*;
+    ///
+    /// IotHubClient::client_type();
+    /// ```
     fn client_type() -> ClientType {
         if cfg!(feature = "device_client") {
             ClientType::Device
@@ -284,6 +257,50 @@ impl IotHub for IotHubClient {
         }
     }
 
+    /// Call this function in order to create an instance of [`IotHubClient`] from iotedge environment.<br>
+    /// ***Note***: this feature is only available with "edge_client" feature enabled.
+    /// ```no_run
+    /// use azure_iot_sdk::client::*;
+    /// use std::{thread, time};
+    /// use tokio::{select, sync::mpsc};
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let (tx_connection_status, mut rx_connection_status) = mpsc::channel(100);
+    ///     let (tx_twin_desired, mut rx_twin_desired) = mpsc::channel(100);
+    ///     let (tx_direct_method, mut rx_direct_method) = mpsc::channel(100);
+    ///     let (tx_incoming_message, mut rx_incoming_message) = mpsc::channel(100);
+    ///
+    ///     let mut client = IotHubClient::from_edge_environment(
+    ///         Some(tx_connection_status),
+    ///         Some(tx_twin_desired),
+    ///         Some(tx_direct_method),
+    ///         Some(IncomingMessageObserver::new(tx_incoming_message, vec![])),
+    ///     )
+    ///     .unwrap();
+    ///
+    ///     loop {
+    ///         select! (
+    ///             status = rx_connection_status.recv() => {
+    ///                 // handle connection status;
+    ///                 // ...
+    ///             },
+    ///             status = rx_twin_desired.recv() => {
+    ///                 // handle twin desired properties;
+    ///                 // ...
+    ///             },
+    ///             status = rx_direct_method.recv() => {
+    ///                 // handle direct method calls;
+    ///                 // ...
+    ///             },
+    ///             status = rx_incoming_message.recv() => {
+    ///                 // handle cloud to device messages;
+    ///                 // ...
+    ///             },
+    ///         )
+    ///     }
+    /// }
+    /// ```
     #[allow(unused)]
     fn from_edge_environment(
         tx_connection_status: Option<mpsc::Sender<AuthenticationStatus>>,
@@ -320,6 +337,52 @@ impl IotHub for IotHubClient {
         }
     }
 
+    /// Call this function in order to create an instance of [`IotHubClient`] by using iot-identity-service.<br>
+    /// ***Note1***: this feature is only available with "device_client" or "module_client" feature enabled.<br>
+    /// ***Note2***: this feature is currently [not supported for all combinations of identity type and authentication mechanism](https://azure.github.io/iot-identity-service/develop-an-agent.html#connecting-your-agent-to-iot-hub).
+    /// ```no_run
+    /// use azure_iot_sdk::client::*;
+    /// use std::{thread, time};
+    /// use tokio::{select, sync::mpsc};
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let (tx_connection_status, mut rx_connection_status) = mpsc::channel(100);
+    ///     let (tx_twin_desired, mut rx_twin_desired) = mpsc::channel(100);
+    ///     let (tx_direct_method, mut rx_direct_method) = mpsc::channel(100);
+    ///     let (tx_incoming_message, mut rx_incoming_message) = mpsc::channel(100);
+    ///
+    ///     let mut client = IotHubClient::from_identity_service(
+    ///         Some(tx_connection_status),
+    ///         Some(tx_twin_desired),
+    ///         Some(tx_direct_method),
+    ///         Some(IncomingMessageObserver::new(tx_incoming_message, vec![])),
+    ///     )
+    ///     .await
+    ///     .unwrap();
+    ///
+    ///     loop {
+    ///         select! (
+    ///             status = rx_connection_status.recv() => {
+    ///                 // handle connection status;
+    ///                 // ...
+    ///             },
+    ///             status = rx_twin_desired.recv() => {
+    ///                 // handle twin desired properties;
+    ///                 // ...
+    ///             },
+    ///             status = rx_direct_method.recv() => {
+    ///                 // handle direct method calls;
+    ///                 // ...
+    ///             },
+    ///             status = rx_incoming_message.recv() => {
+    ///                 // handle cloud to device messages;
+    ///                 // ...
+    ///             },
+    ///         )
+    ///     }
+    /// }
+    /// ```
     async fn from_identity_service(
         _tx_connection_status: Option<mpsc::Sender<AuthenticationStatus>>,
         _tx_twin_desired: Option<mpsc::Sender<(TwinUpdateState, serde_json::Value)>>,
@@ -362,6 +425,50 @@ impl IotHub for IotHubClient {
         }
     }
 
+    /// Call this function in order to create an instance of [`IotHubClient`] by using a connection string.
+    /// ```no_run
+    /// use azure_iot_sdk::client::*;
+    /// use std::{thread, time};
+    /// use tokio::{select, sync::mpsc};
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let (tx_connection_status, mut rx_connection_status) = mpsc::channel(100);
+    ///     let (tx_twin_desired, mut rx_twin_desired) = mpsc::channel(100);
+    ///     let (tx_direct_method, mut rx_direct_method) = mpsc::channel(100);
+    ///     let (tx_incoming_message, mut rx_incoming_message) = mpsc::channel(100);
+    ///
+    ///     let mut client = IotHubClient::from_connection_string(
+    ///         "my connection string",
+    ///         Some(tx_connection_status),
+    ///         Some(tx_twin_desired),
+    ///         Some(tx_direct_method),
+    ///         Some(IncomingMessageObserver::new(tx_incoming_message, vec![])),
+    ///     )
+    ///     .unwrap();
+    ///
+    ///     loop {
+    ///         select! (
+    ///             status = rx_connection_status.recv() => {
+    ///                 // handle connection status;
+    ///                 // ...
+    ///             },
+    ///             status = rx_twin_desired.recv() => {
+    ///                 // handle twin desired properties;
+    ///                 // ...
+    ///             },
+    ///             status = rx_direct_method.recv() => {
+    ///                 // handle direct method calls;
+    ///                 // ...
+    ///             },
+    ///             status = rx_incoming_message.recv() => {
+    ///                 // handle cloud to device messages;
+    ///                 // ...
+    ///             },
+    ///         )
+    ///     }
+    /// }
+    /// ```
     fn from_connection_string(
         connection_string: &str,
         tx_connection_status: Option<mpsc::Sender<AuthenticationStatus>>,
@@ -394,6 +501,31 @@ impl IotHub for IotHubClient {
         Ok(client)
     }
 
+    /// Call this function to send a message (D2C) to iothub.
+    /// ```rust, no_run
+    /// use azure_iot_sdk::client::*;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
+    ///
+    ///     let msg = IotMessage::builder()
+    ///         .set_body(
+    ///             serde_json::to_vec(r#"{"my telemetry message": "hi from device"}"#).unwrap(),
+    ///         )
+    ///         .set_id("my msg id")
+    ///         .set_correlation_id("my correleation id")
+    ///         .set_property(
+    ///             "my property key",
+    ///             "my property value",
+    ///         )
+    ///         .set_output_queue("my output queue")
+    ///         .build()
+    ///         .unwrap();
+    ///
+    ///     client.send_d2c_message(msg);
+    /// }
+    /// ```
     async fn send_d2c_message(&mut self, mut message: IotMessage) -> Result<()> {
         let handle = message.create_outgoing_handle()?;
         let queue = message.output_queue.clone();
@@ -417,6 +549,25 @@ impl IotHub for IotHubClient {
         ))
     }
 
+    /// Call this function to report twin properties to iothub.
+    /// ```rust, no_run
+    /// use azure_iot_sdk::client::*;
+    /// use serde_json::json;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
+    ///
+    ///     let reported = json!({
+    ///         "my_status": {
+    ///             "status": "ok",
+    ///             "timestamp": "2022-03-10",
+    ///         }
+    ///     });
+    ///
+    ///     client.twin_report(reported);
+    /// }
+    /// ```
     async fn twin_report(&mut self, reported: serde_json::Value) -> Result<()> {
         debug!("send reported: {}", reported.to_string());
 
@@ -440,6 +591,18 @@ impl IotHub for IotHubClient {
             .ok_or(anyhow::anyhow!("twin_report: callback returned with error"))
     }
 
+    /// Call this function to trigger a twin update that is asynchronously signaled as twin_desired stream.
+    /// ```rust, no_run
+    /// use azure_iot_sdk::client::*;
+    /// use serde_json::json;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
+    ///
+    ///     client.twin_async();
+    /// }
+    /// ```
     fn twin_async(&mut self) -> Result<()> {
         debug!("twin_complete: get entire twin");
 
@@ -571,7 +734,7 @@ impl IotHubClient {
                     let (tx_result, rx_result) = oneshot::channel::<Result<DispositionResult>>();
 
                     observer
-                        .incoming_message_observer
+                        .observer
                         .blocking_send((msg, tx_result))
                         .expect("c_c2d_message_callback: cannot blocking_send");
 

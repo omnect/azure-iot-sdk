@@ -8,7 +8,7 @@ use std::{
 };
 
 /// incoming message result sent back to cloud
-/// https://azure.github.io/azure-iot-sdk-c/iothub__client__core__common_8h.html#a96cfa82412891d077ec835922ed5b626
+/// <https://azure.github.io/azure-iot-sdk-c/iothub__client__core__common_8h.html#a96cfa82412891d077ec835922ed5b626>
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum DispositionResult {
     /// accept incoming message

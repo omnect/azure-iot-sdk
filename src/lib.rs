@@ -1,5 +1,4 @@
 #![warn(missing_docs)]
-
 //! Wrapper around azure iot-c-sdk-ref.
 //!
 //! A reference implementation can be found [here](https://github.com/omnect/iot-client-template-rs).
@@ -28,5 +27,5 @@
 //! - [device to cloud (D2C) messages](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-devguide-messages-d2c)
 //! - [cloud to device (C2D) messages](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-devguide-messages-c2d)
 
-/// iothub client
+/// A module providing code to establish a connection to iothub.
 pub mod client;
