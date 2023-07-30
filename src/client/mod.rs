@@ -630,16 +630,28 @@ impl IotHubClient {
     fn set_callbacks(&mut self) -> Result<()> {
         let context = self as *mut IotHubClient as *mut c_void;
 
-        self.twin.set_connection_status_callback(
-            Some(IotHubClient::c_connection_status_callback),
-            context,
-        )?;
-        self.twin
-            .set_input_message_callback(Some(IotHubClient::c_c2d_message_callback), context)?;
-        self.twin
-            .set_twin_callback(Some(IotHubClient::c_twin_callback), context)?;
-        self.twin
-            .set_method_callback(Some(IotHubClient::c_direct_method_callback), context)
+        if self.tx_connection_status.is_some() {
+            self.twin.set_connection_status_callback(
+                Some(IotHubClient::c_connection_status_callback),
+                context,
+            )?;
+        }
+
+        if self.tx_incoming_message.is_some() {
+            self.twin
+                .set_input_message_callback(Some(IotHubClient::c_c2d_message_callback), context)?;
+        }
+
+        if self.tx_twin_desired.is_some() {
+            self.twin
+                .set_twin_callback(Some(IotHubClient::c_twin_callback), context)?;
+        }
+        if self.tx_direct_method.is_some() {
+            self.twin
+                .set_method_callback(Some(IotHubClient::c_direct_method_callback), context)?;
+        }
+
+        Ok(())
     }
 
     fn set_options(&mut self) -> Result<()> {
@@ -821,6 +833,8 @@ impl IotHubClient {
             .lock()
             .expect("c_reported_twin_callback: cannot lock result") = status_code == 204;
         result.1.notify_one();
+
+        drop(result);
     }
 
     unsafe extern "C" fn c_direct_method_callback(
@@ -934,6 +948,8 @@ impl IotHubClient {
         }
 
         result.1.notify_one();
+
+        drop(result);
     }
 }
 
