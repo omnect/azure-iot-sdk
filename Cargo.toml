@@ -1,6 +1,6 @@
 [package]
 name = "azure-iot-sdk"
-version = "0.9.5"
+version = "0.10.0"
 edition = "2021"
 authors = ["omnect@conplement.de>"]
 repository = "git@github.com:omnect/azure-iot-sdk.git"
@@ -9,11 +9,15 @@ repository = "git@github.com:omnect/azure-iot-sdk.git"
 
 [dependencies]
 anyhow = "1.0"
-azure-iot-sdk-sys = { git = "https://github.com/omnect/azure-iot-sdk-sys.git", tag = "0.5.8", default-features = false }
-eis-utils = { git = "https://github.com/omnect/eis-utils.git", tag = "0.2.6", optional = true }
+async-trait = "0.1"
+azure-iot-sdk-sys = { git = "https://github.com/omnect/azure-iot-sdk-sys.git", tag = "0.6.0", default-features = false }
+eis-utils = { git = "https://github.com/omnect/eis-utils.git", tag = "0.3.0", optional = true }
 log = "0.4"
 serde_json = "1.0"
-rand = "0.8"
+tokio = { version = "1", features = ["sync"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 [features]
 # select either "module_client", "edge_client" or "device_client" functionality
@@ -21,3 +25,5 @@ default = []
 device_client = ["eis-utils"]
 module_client = ["eis-utils"]
 edge_client = ["azure-iot-sdk-sys/edge_modules"]
+# enable logging in azure_sdk_for_c
+iot_c_sdk_logs = []

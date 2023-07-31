@@ -1,10 +1,25 @@
 use anyhow::Result;
 use azure_iot_sdk_sys::*;
 use log::{error, info};
-use std::collections::HashMap;
-use std::ffi::CStr;
-use std::ffi::{CString, NulError};
-use std::slice;
+use std::{
+    collections::HashMap,
+    ffi::{CStr, CString, NulError},
+    slice,
+};
+
+/// incoming message result sent back to cloud
+/// <https://azure.github.io/azure-iot-sdk-c/iothub__client__core__common_8h.html#a96cfa82412891d077ec835922ed5b626>
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum DispositionResult {
+    /// accept incoming message
+    Accepted,
+    /// reject incoming message
+    Rejected,
+    /// abandon incoming message
+    Abandoned,
+    /// async ack incoming message
+    AsyncAck,
+}
 
 /// message direction
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
@@ -18,28 +33,28 @@ pub enum Direction {
 
 /// Let's you either create an outgoing D2C messages or parse an incoming cloud to device (C2D) messages.
 /// ```rust, no_run
-/// # use azure_iot_sdk::client::*;
-/// # struct MyEventHandler {}
-/// # impl EventHandler for MyEventHandler {}
-/// #
-/// # let event_handler = MyEventHandler{};
-/// # let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
-/// #
-/// let msg = IotMessage::builder()
-///     .set_body(
-///         serde_json::to_vec(r#"{"my telemetry message": "hi from device"}"#).unwrap(),
-///     )
-///     .set_id("my msg id")
-///     .set_correlation_id("my correleation id")
-///     .set_property(
-///         "my property key",
-///         "my property value",
-///     )
-///     .set_output_queue("my output queue")
-///     .build()
-///     .unwrap();
+/// use azure_iot_sdk::client::*;
 ///
-/// client.send_d2c_message(msg);
+/// #[tokio::main]
+/// async fn main() {
+///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
+///
+///     let msg = IotMessage::builder()
+///         .set_body(
+///             serde_json::to_vec(r#"{"my telemetry message": "hi from device"}"#).unwrap(),
+///         )
+///         .set_id("my msg id")
+///         .set_correlation_id("my correleation id")
+///         .set_property(
+///             "my property key",
+///             "my property value",
+///         )
+///         .set_output_queue("my output queue")
+///         .build()
+///         .unwrap();
+///
+///     client.send_d2c_message(msg);
+/// }
 /// ```
 #[derive(Default, Debug, PartialEq)]
 pub struct IotMessage {
@@ -188,7 +203,7 @@ impl IotMessage {
             self.handle = Some(handle);
         }
 
-        Ok(self.handle.unwrap())
+        Ok(self.handle.expect("no handle"))
     }
 
     fn destroy_handle(&mut self) {
@@ -204,28 +219,28 @@ impl IotMessage {
 
 /// Builder for constructing outgoing D2C message instances
 /// ```rust, no_run
-/// # use azure_iot_sdk::client::*;
-/// # struct MyEventHandler {}
-/// # impl EventHandler for MyEventHandler {}
-/// #
-/// # let event_handler = MyEventHandler{};
-/// # let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
-/// #
-/// let msg = IotMessage::builder()
-///     .set_body(
-///         serde_json::to_vec(r#"{"my telemetry message": "hi from device"}"#).unwrap(),
-///     )
-///     .set_id("my msg id")
-///     .set_correlation_id("my correleation id")
-///     .set_property(
-///         "my property key",
-///         "my property value",
-///     )
-///     .set_output_queue("my output queue")
-///     .build()
-///     .unwrap();
+/// use azure_iot_sdk::client::*;
 ///
-/// client.send_d2c_message(msg);
+/// #[tokio::main]
+/// async fn main() {
+///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
+///
+///     let msg = IotMessage::builder()
+///         .set_body(
+///             serde_json::to_vec(r#"{"my telemetry message": "hi from device"}"#).unwrap(),
+///         )
+///         .set_id("my msg id")
+///         .set_correlation_id("my correleation id")
+///         .set_property(
+///             "my property key",
+///             "my property value",
+///         )
+///         .set_output_queue("my output queue")
+///         .build()
+///         .unwrap();
+///
+///     client.send_d2c_message(msg);
+/// }
 /// ```
 #[derive(Debug, Default)]
 pub struct IotMessageBuilder {
@@ -238,21 +253,21 @@ pub struct IotMessageBuilder {
 impl IotMessageBuilder {
     /// Set the message body
     /// ```rust, no_run
-    /// # use azure_iot_sdk::client::*;
-    /// # struct MyEventHandler {}
-    /// # impl EventHandler for MyEventHandler {}
-    /// #
-    /// # let event_handler = MyEventHandler{};
-    /// # let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
-    /// #
-    /// let msg = IotMessage::builder()
-    ///     .set_body(
-    ///         serde_json::to_vec(r#"{"my telemetry message": "hi from device"}"#).unwrap(),
-    ///     )
-    ///     .build()
-    ///     .unwrap();
+    /// use azure_iot_sdk::client::*;
     ///
-    /// client.send_d2c_message(msg);
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
+    ///
+    ///     let msg = IotMessage::builder()
+    ///         .set_body(
+    ///             serde_json::to_vec(r#"{"my telemetry message": "hi from device"}"#).unwrap(),
+    ///         )
+    ///         .build()
+    ///         .unwrap();
+    ///
+    ///     client.send_d2c_message(msg);
+    /// }
     /// ```
     pub fn set_body(mut self, body: Vec<u8>) -> Self {
         self.message = Some(body);
@@ -261,19 +276,19 @@ impl IotMessageBuilder {
 
     /// Set the identifier for this message
     /// ```rust, no_run
-    /// # use azure_iot_sdk::client::*;
-    /// # struct MyEventHandler {}
-    /// # impl EventHandler for MyEventHandler {}
-    /// #
-    /// # let event_handler = MyEventHandler{};
-    /// # let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
-    /// #
-    /// let msg = IotMessage::builder()
-    ///     .set_id("my msg id")
-    ///     .build()
-    ///     .unwrap();
+    /// use azure_iot_sdk::client::*;
     ///
-    /// client.send_d2c_message(msg);
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
+    ///
+    ///     let msg = IotMessage::builder()
+    ///         .set_id("my msg id")
+    ///         .build()
+    ///         .unwrap();
+    ///
+    ///     client.send_d2c_message(msg);
+    /// }
     /// ```
     pub fn set_id(self, mid: impl Into<String>) -> Self {
         self.set_system_property("$.mid", mid)
@@ -281,19 +296,19 @@ impl IotMessageBuilder {
 
     /// Set the identifier for this message
     /// ```rust, no_run
-    /// # use azure_iot_sdk::client::*;
-    /// # struct MyEventHandler {}
-    /// # impl EventHandler for MyEventHandler {}
+    /// use azure_iot_sdk::client::*;
     ///
-    /// # let event_handler = MyEventHandler{};
-    /// # let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
-    /// #
-    /// let msg = IotMessage::builder()
-    ///     .set_correlation_id("my correlation id")
-    ///     .build()
-    ///     .unwrap();
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
     ///
-    /// client.send_d2c_message(msg);
+    ///     let msg = IotMessage::builder()
+    ///         .set_correlation_id("my correlation id")
+    ///         .build()
+    ///         .unwrap();
+    ///
+    ///     client.send_d2c_message(msg);
+    /// }
     /// ```
     pub fn set_correlation_id(self, cid: impl Into<String>) -> Self {
         self.set_system_property("$.cid", cid)
@@ -302,19 +317,19 @@ impl IotMessageBuilder {
     /// Set the content-type for this message, such as `text/plain`.
     /// To allow routing query on the message body, this value should be set to `application/json`
     /// ```rust, no_run
-    /// # use azure_iot_sdk::client::*;
-    /// # struct MyEventHandler {}
-    /// # impl EventHandler for MyEventHandler {}
-    /// #
-    /// # let event_handler = MyEventHandler{};
-    /// # let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
-    /// #
-    /// let msg = IotMessage::builder()
-    ///     .set_content_type("application/json")
-    ///     .build()
-    ///     .unwrap();
+    /// use azure_iot_sdk::client::*;
     ///
-    /// client.send_d2c_message(msg);
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
+    ///
+    ///     let msg = IotMessage::builder()
+    ///         .set_content_type("application/json")
+    ///         .build()
+    ///         .unwrap();
+    ///
+    ///     client.send_d2c_message(msg);
+    /// }
     /// ```
     pub fn set_content_type(self, content_type: impl Into<String>) -> Self {
         self.set_system_property("$.ct", content_type)
@@ -324,19 +339,19 @@ impl IotMessageBuilder {
     /// If the content-type is set to `application/json`, allowed values are `UTF-8`, `UTF-16`, `UTF-32`
     /// To allow routing query on the message body, this value should be set to `application/json`
     /// ```rust, no_run
-    /// # use azure_iot_sdk::client::*;
-    /// # struct MyEventHandler {}
-    /// # impl EventHandler for MyEventHandler {}
-    /// #
-    /// # let event_handler = MyEventHandler{};
-    /// # let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
-    /// #
-    /// let msg = IotMessage::builder()
-    ///     .set_content_encoding("UTF-8")
-    ///     .build()
-    ///     .unwrap();
+    /// use azure_iot_sdk::client::*;
     ///
-    /// client.send_d2c_message(msg);
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
+    ///
+    ///     let msg = IotMessage::builder()
+    ///         .set_content_encoding("UTF-8")
+    ///         .build()
+    ///         .unwrap();
+    ///
+    ///     client.send_d2c_message(msg);
+    /// }
     /// ```
     pub fn set_content_encoding(self, content_encoding: impl Into<String>) -> Self {
         self.set_system_property("$.ce", content_encoding)
@@ -344,19 +359,19 @@ impl IotMessageBuilder {
 
     /// Set the output queue to be used with this message
     /// ```rust, no_run
-    /// # use azure_iot_sdk::client::*;
-    /// # struct MyEventHandler {}
-    /// # impl EventHandler for MyEventHandler {}
-    /// #
-    /// # let event_handler = MyEventHandler{};
-    /// # let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
-    /// #
-    /// let msg = IotMessage::builder()
-    ///     .set_output_queue("my output queue")
-    ///     .build()
-    ///     .unwrap();
+    /// use azure_iot_sdk::client::*;
     ///
-    /// client.send_d2c_message(msg);
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
+    ///
+    ///     let msg = IotMessage::builder()
+    ///         .set_output_queue("my output queue")
+    ///         .build()
+    ///         .unwrap();
+    ///
+    ///     client.send_d2c_message(msg);
+    /// }
     /// ```
     pub fn set_output_queue(mut self, queue: impl Into<String>) -> Self {
         self.output_queue = queue.into();
@@ -365,20 +380,20 @@ impl IotMessageBuilder {
 
     /// Add a message property
     /// ```rust, no_run
-    /// # use azure_iot_sdk::client::*;
-    /// # struct MyEventHandler {}
-    /// # impl EventHandler for MyEventHandler {}
-    /// #
-    /// # let event_handler = MyEventHandler{};
-    /// # let mut client = IotHubClient::from_identity_service(event_handler).unwrap();
-    /// #
-    /// let msg = IotMessage::builder()
-    ///     .set_property("my key1", "my property1")
-    ///     .set_property("my key2", "my property2")
-    ///     .build()
-    ///     .unwrap();
+    /// use azure_iot_sdk::client::*;
     ///
-    /// client.send_d2c_message(msg);
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
+    ///
+    ///     let msg = IotMessage::builder()
+    ///         .set_property("my key1", "my property1")
+    ///         .set_property("my key2", "my property2")
+    ///         .build()
+    ///         .unwrap();
+    ///
+    ///     client.send_d2c_message(msg);
+    /// }
     /// ```
     pub fn set_property(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.properties.insert(key.into(), value.into());
@@ -389,7 +404,7 @@ impl IotMessageBuilder {
     pub fn build(self) -> Result<IotMessage> {
         Ok(IotMessage {
             handle: None,
-            body: self.message.unwrap(),
+            body: self.message.expect("no message buffer"),
             direction: Direction::Outgoing,
             output_queue: CString::new(self.output_queue)?,
             properties: self

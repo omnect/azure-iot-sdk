@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] Q3 2023
+ - replaced EventHandler by async API's
+ - switched to azure-iot-sdk-c convenient layer which brings its own thread safe runtime
+ - bumped to azure-iot-sdk-sys 0.6.0 which supports azure-iot-sdk-c convenient layer
+ - bumped to eis-utils 0.3.0 providing async 'request_connection_string_from_eis_with_expiry'
+
 ## [0.9.5] Q2 2023
  - removed get_ prefix from getters in order to be conform with rust convention
  - changed omnect git dependencies from ssh to https url's
