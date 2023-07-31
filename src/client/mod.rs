@@ -34,11 +34,9 @@ use std::{
     boxed::Box,
     ffi::{c_void, CStr, CString},
     mem, str,
-    sync::{Arc, Mutex, Once},
+    sync::Once,
 };
-use tokio::sync::{
-    Notify, {mpsc, oneshot},
-};
+use tokio::sync::{mpsc, oneshot};
 
 /// Result used by iothub client consumer to send the result of a direct method
 pub type DirectMethodResult = oneshot::Sender<Result<Option<serde_json::Value>>>;
@@ -529,8 +527,7 @@ impl IotHub for IotHubClient {
     async fn send_d2c_message(&mut self, mut message: IotMessage) -> Result<()> {
         let handle = message.create_outgoing_handle()?;
         let queue = message.output_queue.clone();
-        let notify = Arc::new(Notify::new());
-        let result = Arc::new(Mutex::new(false));
+        let (tx, rx) = oneshot::channel::<bool>();
 
         debug!("send_d2c_message: {queue:#?}");
 
@@ -538,12 +535,11 @@ impl IotHub for IotHubClient {
             handle,
             queue,
             Some(IotHubClient::c_d2c_confirmation_callback),
-            Box::into_raw(Box::new((result.clone(), notify.clone()))) as *mut c_void,
+            Box::into_raw(Box::new(tx)) as *mut c_void,
         )?;
 
-        notify.notified().await;
+        let succeeded = rx.await?;
 
-        let succeeded = result.lock().expect("send_d2c_message: cannot lock result");
         succeeded.then_some(()).ok_or(anyhow::anyhow!(
             "send_d2c_message: callback returned with error"
         ))
@@ -573,19 +569,17 @@ impl IotHub for IotHubClient {
 
         let reported_state = CString::new(reported.to_string())?;
         let size = reported_state.as_bytes().len();
-        let notify = Arc::new(Notify::new());
-        let result = Arc::new(Mutex::new(false));
+        let (tx, rx) = oneshot::channel::<bool>();
 
         self.twin.send_reported_state(
             reported_state,
             size,
             Some(IotHubClient::c_reported_twin_callback),
-            Box::into_raw(Box::new((result.clone(), notify.clone()))) as *mut c_void,
+            Box::into_raw(Box::new(tx)) as *mut c_void,
         )?;
 
-        notify.notified().await;
+        let succeeded = rx.await?;
 
-        let succeeded = result.lock().expect("twin_report: cannot lock result");
         succeeded
             .then_some(())
             .ok_or(anyhow::anyhow!("twin_report: callback returned with error"))
@@ -825,16 +819,12 @@ impl IotHubClient {
     ) {
         debug!("SendReportedTwin result: {status_code}");
 
-        let result: Box<(Arc<Mutex<bool>>, Arc<Notify>)> =
-            Box::from_raw(context as *mut (Arc<Mutex<bool>>, Arc<Notify>));
+        let result: Box<oneshot::Sender<bool>> =
+            Box::from_raw(context as *mut oneshot::Sender<bool>);
 
-        *result
-            .0
-            .lock()
-            .expect("c_reported_twin_callback: cannot lock result") = status_code == 204;
-        result.1.notify_one();
-
-        drop(result);
+        result
+            .send(status_code == 204)
+            .expect("c_reported_twin_callback: cannot send result");
     }
 
     unsafe extern "C" fn c_direct_method_callback(
@@ -927,29 +917,24 @@ impl IotHubClient {
         status: IOTHUB_CLIENT_CONFIRMATION_RESULT,
         context: *mut std::ffi::c_void,
     ) {
-        let result: Box<(Arc<Mutex<bool>>, Arc<Notify>)> =
-            Box::from_raw(context as *mut (Arc<Mutex<bool>>, Arc<Notify>));
+        let result: Box<oneshot::Sender<bool>> =
+            Box::from_raw(context as *mut oneshot::Sender<bool>);
+        let mut succeeded = false;
 
         match status {
             IOTHUB_CLIENT_CONFIRMATION_RESULT_TAG_IOTHUB_CLIENT_CONFIRMATION_OK => {
-                *result
-                    .0
-                    .lock()
-                    .expect("c_d2c_confirmation_callback: cannot lock result") = true;
+                succeeded = true;
                 debug!("c_d2c_confirmation_callback: received confirmation from iothub.");
             },
             IOTHUB_CLIENT_CONFIRMATION_RESULT_TAG_IOTHUB_CLIENT_CONFIRMATION_BECAUSE_DESTROY => error!("c_d2c_confirmation_callback: received confirmation from iothub with error IOTHUB_CLIENT_CONFIRMATION_BECAUSE_DESTROY."),
             IOTHUB_CLIENT_CONFIRMATION_RESULT_TAG_IOTHUB_CLIENT_CONFIRMATION_ERROR =>  error!("c_d2c_confirmation_callback: received confirmation from iothub with error IOTHUB_CLIENT_CONFIRMATION_ERROR."),
             IOTHUB_CLIENT_CONFIRMATION_RESULT_TAG_IOTHUB_CLIENT_CONFIRMATION_MESSAGE_TIMEOUT => error!("c_d2c_confirmation_callback: received confirmation from iothub with error IOTHUB_CLIENT_CONFIRMATION_MESSAGE_TIMEOUT."),
-            _ => {
-                error!("c_d2c_confirmation_callback: received confirmation from iothub with unknown IOTHUB_CLIENT_CONFIRMATION_RESULT");
-                return;
-            }
+            _ => error!("c_d2c_confirmation_callback: received confirmation from iothub with unknown IOTHUB_CLIENT_CONFIRMATION_RESULT"),
         }
 
-        result.1.notify_one();
-
-        drop(result);
+        result
+            .send(succeeded)
+            .expect("c_d2c_confirmation_callback: cannot send result");
     }
 }
 
