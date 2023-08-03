@@ -337,7 +337,7 @@ impl IotMessageBuilder {
 
     /// Set the content-encoding for this message
     /// If the content-type is set to `application/json`, allowed values are `UTF-8`, `UTF-16`, `UTF-32`
-    /// To allow routing query on the message body, this value should be set to `application/json`
+    /// To allow routing query on the message body, this value should be set to `UTF-8`
     /// ```rust, no_run
     /// use azure_iot_sdk::client::*;
     ///
