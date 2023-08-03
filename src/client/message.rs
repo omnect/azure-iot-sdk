@@ -294,7 +294,7 @@ impl IotMessageBuilder {
         self.set_system_property("$.mid", mid)
     }
 
-    /// Set the identifier for this message
+    /// Set the correlation identifier for this message
     /// ```rust, no_run
     /// use azure_iot_sdk::client::*;
     ///
