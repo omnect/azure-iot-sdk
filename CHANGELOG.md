@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] Q3 2023
+ - fixed inaccuracies in IoTMessage docstrings
+
 ## [0.10.0] Q3 2023
  - replaced EventHandler by async API's
  - switched to azure-iot-sdk-c convenient layer which brings its own thread safe runtime
