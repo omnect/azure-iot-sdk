@@ -29,7 +29,7 @@ use core::slice;
 #[cfg(any(feature = "module_client", feature = "device_client"))]
 use eis_utils::*;
 use futures::task;
-use log::{debug, error};
+use log::{debug, error, trace};
 use serde_json::json;
 use std::{
     boxed::Box,
@@ -995,7 +995,7 @@ impl IotHubClient {
             before - self.confirmation_set.len()
         );
 
-        // spawn a task to handle the folowwing results:
+        // spawn a task to handle the following results:
         //   - succeeded
         //   - failed
         //   - timed out
@@ -1003,7 +1003,7 @@ impl IotHubClient {
             match timeout(Duration::from_secs(Self::CONFIRMATION_TIMEOUT_SECS), rx).await {
                 Ok(Ok(false)) => panic!("twin_report: failed"),
                 Err(_) => panic!("twin_report: timed out"),
-                _ => debug!("twin_report: succeeded"),
+                _ => trace!("twin_report: succeeded"),
             }
         });
     }
