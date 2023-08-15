@@ -28,6 +28,7 @@ use azure_iot_sdk_sys::*;
 use core::slice;
 #[cfg(any(feature = "module_client", feature = "device_client"))]
 use eis_utils::*;
+use futures::task;
 use log::{debug, error};
 use serde_json::json;
 use std::{
@@ -35,8 +36,15 @@ use std::{
     ffi::{c_void, CStr, CString},
     mem, str,
     sync::Once,
+    task::{Context, Poll},
 };
-use tokio::sync::{mpsc, oneshot};
+#[cfg(any(feature = "module_client", feature = "device_client"))]
+use std::time::SystemTime;
+use tokio::{
+    sync::{mpsc, oneshot},
+    task::{JoinError, JoinSet},
+    time::{timeout, Duration},
+};
 
 /// Result used by iothub client consumer to send the result of a direct method
 pub type DirectMethodResult = oneshot::Sender<Result<Option<serde_json::Value>>>;
@@ -94,14 +102,15 @@ pub trait IotHub {
     fn twin_async(&mut self) -> Result<()>;
 
     /// Call this function to send a message (D2C) to iothub.
-    async fn send_d2c_message(&mut self, mut message: IotMessage) -> Result<()>;
+    fn send_d2c_message(&mut self, message: IotMessage) -> Result<()>;
 
     /// Call this function to report twin properties to iothub.
-    async fn twin_report(&mut self, reported: serde_json::Value) -> Result<()>;
-}
+    fn twin_report(&mut self, reported: serde_json::Value) -> Result<()>;
 
-#[cfg(any(feature = "module_client", feature = "device_client"))]
-use std::time::{Duration, SystemTime};
+    /// Call this function to properly shutdown IotHub. All reported properties and D2C messages will be
+    /// continued to completion.
+    async fn shutdown(&mut self);
+}
 
 /// iothub cloud to device (C2D) and device to cloud (D2C) messages
 mod message;
@@ -223,6 +232,7 @@ pub struct IotHubClient {
     tx_twin_desired: Option<mpsc::Sender<(TwinUpdateState, serde_json::Value)>>,
     tx_direct_method: Option<DirectMethodSender>,
     tx_incoming_message: Option<IncomingMessageObserver>,
+    confirmation_set: JoinSet<()>,
 }
 
 #[async_trait(?Send)]
@@ -325,6 +335,7 @@ impl IotHub for IotHubClient {
                 tx_twin_desired,
                 tx_direct_method,
                 tx_incoming_message,
+                confirmation_set: JoinSet::new(),
             });
 
             client.set_callbacks()?;
@@ -490,6 +501,7 @@ impl IotHub for IotHubClient {
             tx_twin_desired,
             tx_direct_method,
             tx_incoming_message,
+            confirmation_set: JoinSet::new(),
         });
 
         client.set_callbacks()?;
@@ -524,7 +536,7 @@ impl IotHub for IotHubClient {
     ///     client.send_d2c_message(msg);
     /// }
     /// ```
-    async fn send_d2c_message(&mut self, mut message: IotMessage) -> Result<()> {
+    fn send_d2c_message(&mut self, mut message: IotMessage) -> Result<()> {
         let handle = message.create_outgoing_handle()?;
         let queue = message.output_queue.clone();
         let (tx, rx) = oneshot::channel::<bool>();
@@ -538,11 +550,9 @@ impl IotHub for IotHubClient {
             Box::into_raw(Box::new(tx)) as *mut c_void,
         )?;
 
-        let succeeded = rx.await?;
+        self.spawn_confirmation(rx);
 
-        succeeded.then_some(()).ok_or(anyhow::anyhow!(
-            "send_d2c_message: callback returned with error"
-        ))
+        Ok(())
     }
 
     /// Call this function to report twin properties to iothub.
@@ -564,7 +574,7 @@ impl IotHub for IotHubClient {
     ///     client.twin_report(reported);
     /// }
     /// ```
-    async fn twin_report(&mut self, reported: serde_json::Value) -> Result<()> {
+    fn twin_report(&mut self, reported: serde_json::Value) -> Result<()> {
         debug!("send reported: {}", reported.to_string());
 
         let reported_state = CString::new(reported.to_string())?;
@@ -578,11 +588,9 @@ impl IotHub for IotHubClient {
             Box::into_raw(Box::new(tx)) as *mut c_void,
         )?;
 
-        let succeeded = rx.await?;
+        self.spawn_confirmation(rx);
 
-        succeeded
-            .then_some(())
-            .ok_or(anyhow::anyhow!("twin_report: callback returned with error"))
+        Ok(())
     }
 
     /// Call this function to trigger a twin update that is asynchronously signaled as twin_desired stream.
@@ -605,9 +613,42 @@ impl IotHub for IotHubClient {
         self.twin
             .twin_async(Some(IotHubClient::c_twin_callback), context)
     }
+
+    /// Call this function to properly shutdown IotHub. All reported properties and D2C messages will be
+    /// continued to completion.
+    /// ```rust, no_run
+    /// use azure_iot_sdk::client::*;
+    /// use serde_json::json;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
+    ///
+    ///     let reported = json!({
+    ///         "my_status": {
+    ///             "status": "ok",
+    ///             "timestamp": "2022-03-10",
+    ///         }
+    ///     });
+    ///
+    ///     client.twin_report(reported);
+    ///
+    ///     client.shutdown();
+    /// }
+    /// ```
+    async fn shutdown(&mut self) {
+        let mut poll = Some(Ok::<_, JoinError>(()));
+
+        // join shouldn't take much longer than CONFIRMATION_TIMEOUT_SECS
+        while poll.is_some() {
+            poll = self.confirmation_set.join_next().await;
+        }
+    }
 }
 
 impl IotHubClient {
+    const CONFIRMATION_TIMEOUT_SECS: u64 = 5;
+
     fn iothub_init() -> Result<()> {
         unsafe {
             IOTHUB_INIT_ONCE.call_once(|| {
@@ -935,6 +976,36 @@ impl IotHubClient {
         result
             .send(succeeded)
             .expect("c_d2c_confirmation_callback: cannot send result");
+    }
+
+    fn spawn_confirmation(&mut self, rx: oneshot::Receiver<bool>) {
+        let before = self.confirmation_set.len();
+        let waker = task::noop_waker();
+        let mut cx = Context::from_waker(&waker);
+        let mut poll = Poll::Ready(Some(Ok::<_, JoinError>(())));
+
+        // check if some confirmations run to completion meanwhile
+        // we don't wait for completion here
+        while let Poll::Ready(Some(Ok(()))) = poll {
+            poll = self.confirmation_set.poll_join_next(&mut cx);
+        }
+
+        debug!(
+            "cleaned {} confirmations",
+            before - self.confirmation_set.len()
+        );
+
+        // spawn a task to handle the folowwing results:
+        //   - succeeded
+        //   - failed
+        //   - timed out
+        self.confirmation_set.spawn(async move {
+            match timeout(Duration::from_secs(Self::CONFIRMATION_TIMEOUT_SECS), rx).await {
+                Ok(Ok(false)) => panic!("twin_report: failed"),
+                Err(_) => panic!("twin_report: timed out"),
+                _ => debug!("twin_report: succeeded"),
+            }
+        });
     }
 }
 
