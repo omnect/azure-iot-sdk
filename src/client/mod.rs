@@ -858,7 +858,7 @@ impl IotHubClient {
         status_code: std::os::raw::c_int,
         context: *mut ::std::os::raw::c_void,
     ) {
-        debug!("SendReportedTwin result: {status_code}");
+        trace!("SendReportedTwin result: {status_code}");
 
         let result: Box<oneshot::Sender<bool>> =
             Box::from_raw(context as *mut oneshot::Sender<bool>);
@@ -990,7 +990,7 @@ impl IotHubClient {
             poll = self.confirmation_set.poll_join_next(&mut cx);
         }
 
-        debug!(
+        trace!(
             "cleaned {} confirmations",
             before - self.confirmation_set.len()
         );
