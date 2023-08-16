@@ -46,7 +46,7 @@ pub trait Twin {
     fn destroy(&mut self);
 
     fn send_event_to_output_async(
-        &mut self,
+        &self,
         message_handle: IOTHUB_MESSAGE_HANDLE,
         queue: CString,
         callback: IOTHUB_CLIENT_EVENT_CONFIRMATION_CALLBACK,
@@ -139,7 +139,7 @@ impl Twin for ModuleTwin {
     }
 
     fn send_event_to_output_async(
-        &mut self,
+        &self,
         message_handle: IOTHUB_MESSAGE_HANDLE,
         queue: CString,
         callback: IOTHUB_CLIENT_EVENT_CONFIRMATION_CALLBACK,
@@ -331,7 +331,7 @@ impl Twin for DeviceTwin {
     }
 
     fn send_event_to_output_async(
-        &mut self,
+        &self,
         message_handle: IOTHUB_MESSAGE_HANDLE,
         _queue: CString,
         callback: IOTHUB_CLIENT_EVENT_CONFIRMATION_CALLBACK,
