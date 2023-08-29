@@ -31,6 +31,8 @@ use eis_utils::*;
 use futures::task;
 use log::{debug, error, trace};
 use serde_json::json;
+#[cfg(any(feature = "module_client", feature = "device_client"))]
+use std::time::SystemTime;
 use std::{
     boxed::Box,
     ffi::{c_void, CStr, CString},
@@ -38,8 +40,6 @@ use std::{
     sync::Once,
     task::{Context, Poll},
 };
-#[cfg(any(feature = "module_client", feature = "device_client"))]
-use std::time::SystemTime;
 use tokio::{
     sync::{mpsc, oneshot},
     task::{JoinError, JoinSet},
