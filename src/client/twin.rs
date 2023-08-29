@@ -1,6 +1,6 @@
 use anyhow::Result;
 use azure_iot_sdk_sys::*;
-use std::ffi::{c_void, CStr, CString};
+use std::ffi::{CStr, CString};
 
 #[cfg(any(feature = "module_client", feature = "edge_client"))]
 #[derive(Default, Debug)]
@@ -152,7 +152,7 @@ impl Twin for ModuleTwin {
                     message_handle,
                     queue.as_ptr(),
                     callback,
-                    ctx as *mut c_void,
+                    ctx as *mut std::ffi::c_void,
                 )
             {
                 anyhow::bail!("error while calling IoTHubModuleClient_SendEventToOutputAsync()",);
@@ -342,7 +342,7 @@ impl Twin for DeviceTwin {
                 self.handle.expect("no handle"),
                 message_handle,
                 callback,
-                ctx as *mut c_void,
+                ctx,
             );
 
             if result != IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK {
