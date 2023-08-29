@@ -396,7 +396,10 @@ impl IotMessageBuilder {
     /// }
     /// ```
     pub fn set_property(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
-        self.properties.insert(key.into(), value.into());
+        let key = IotMessageBuilder::urlencode(key);
+        let value = IotMessageBuilder::urlencode(value);
+
+        self.properties.insert(key, value);
         self
     }
 
@@ -439,8 +442,16 @@ impl IotMessageBuilder {
         property_name: impl Into<String>,
         value: impl Into<String>,
     ) -> Self {
-        self.system_properties
-            .insert(property_name.into(), value.into());
+        // we don't have to encode property_names as they are only used internally
+        let value = IotMessageBuilder::urlencode(value);
+
+        self.system_properties.insert(property_name.into(), value);
         self
+    }
+
+    fn urlencode(value: impl Into<String>) -> String {
+        form_urlencoded::Serializer::new(String::new())
+            .append_key_only(&value.into())
+            .finish()
     }
 }
