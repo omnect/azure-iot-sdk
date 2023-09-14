@@ -152,7 +152,7 @@ impl Twin for ModuleTwin {
                     message_handle,
                     queue.as_ptr(),
                     callback,
-                    ctx as *mut std::ffi::c_void,
+                    ctx,
                 )
             {
                 anyhow::bail!("error while calling IoTHubModuleClient_SendEventToOutputAsync()",);
