@@ -9,7 +9,7 @@ use std::{
 
 /// incoming message result sent back to cloud
 /// <https://azure.github.io/azure-iot-sdk-c/iothub__client__core__common_8h.html#a96cfa82412891d077ec835922ed5b626>
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum DispositionResult {
     /// accept incoming message
     Accepted,
@@ -22,7 +22,7 @@ pub enum DispositionResult {
 }
 
 /// message direction
-#[derive(Copy, Clone, Debug, Default, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 pub enum Direction {
     /// incoming cloud to device (C2D) message
     Incoming,
@@ -56,7 +56,7 @@ pub enum Direction {
 ///     client.send_d2c_message(msg);
 /// }
 /// ```
-#[derive(Default, Debug, PartialEq)]
+#[derive(Default, Debug, Eq, PartialEq)]
 pub struct IotMessage {
     handle: Option<IOTHUB_MESSAGE_HANDLE>,
     /// message body

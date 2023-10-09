@@ -128,7 +128,7 @@ macro_rules! days_to_secs {
 }
 
 /// Indicates [type](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-devguide-module-twins#back-end-operations) of desired properties update
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum TwinUpdateState {
     /// complete update of desired properties
     Complete = 0,
@@ -137,7 +137,7 @@ pub enum TwinUpdateState {
 }
 
 /// Reason for unauthenticated connection result
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum UnauthenticatedReason {
     /// SAS token expired
     ExpiredSasToken,
@@ -154,7 +154,7 @@ pub enum UnauthenticatedReason {
 }
 
 /// Authentication status as a result of establishing a connection
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum AuthenticationStatus {
     /// authenticated successfully
     Authenticated,

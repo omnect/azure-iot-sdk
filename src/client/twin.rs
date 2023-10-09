@@ -15,7 +15,7 @@ pub struct DeviceTwin {
 }
 
 /// type of client twin
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum ClientType {
     /// edge module twin client
     Edge,
