@@ -450,7 +450,7 @@ impl IotMessageBuilder {
     }
 
     fn urlencode(value: impl Into<String>) -> String {
-        form_urlencoded::Serializer::new(String::new())
+        url::form_urlencoded::Serializer::new(String::new())
             .append_key_only(&value.into())
             .finish()
     }
