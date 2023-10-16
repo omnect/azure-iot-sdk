@@ -101,7 +101,7 @@ impl ModuleTwin {
             let handle = IoTHubModuleClient_CreateFromEnvironment(Some(MQTT_Protocol));
 
             if handle.is_null() {
-                anyhow::bail!("error while calling IoTHubModuleClient_CreateFromEnvironment()",);
+                anyhow::bail!("error while calling IoTHubModuleClient_CreateFromEnvironment()");
             }
 
             self.handle = Some(handle);
@@ -155,7 +155,7 @@ impl Twin for ModuleTwin {
                     ctx,
                 )
             {
-                anyhow::bail!("error while calling IoTHubModuleClient_SendEventToOutputAsync()",);
+                anyhow::bail!("error while calling IoTHubModuleClient_SendEventToOutputAsync()");
             }
 
             Ok(())
@@ -179,7 +179,7 @@ impl Twin for ModuleTwin {
                     ctx,
                 )
             {
-                anyhow::bail!("error while calling IoTHubModuleClient_SendReportedState()",);
+                anyhow::bail!("error while calling IoTHubModuleClient_SendReportedState()");
             }
 
             Ok(())
@@ -223,7 +223,7 @@ impl Twin for ModuleTwin {
                     ctx,
                 )
             {
-                anyhow::bail!("error while calling IoTHubModuleClient_SetInputMessageCallback()",);
+                anyhow::bail!("error while calling IoTHubModuleClient_SetInputMessageCallback()");
             }
 
             Ok(())
@@ -243,7 +243,7 @@ impl Twin for ModuleTwin {
                     ctx,
                 )
             {
-                anyhow::bail!("error while calling IoTHubModuleClient_SetModuleTwinCallback()",);
+                anyhow::bail!("error while calling IoTHubModuleClient_SetModuleTwinCallback()");
             }
 
             Ok(())
@@ -259,7 +259,7 @@ impl Twin for ModuleTwin {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubModuleClient_GetTwinAsync(self.handle.expect("no handle"), callback, ctx)
             {
-                anyhow::bail!("error while calling IoTHubModuleClient_GetTwinAsync()",);
+                anyhow::bail!("error while calling IoTHubModuleClient_GetTwinAsync()");
             }
 
             Ok(())
@@ -279,7 +279,7 @@ impl Twin for ModuleTwin {
                     ctx,
                 )
             {
-                anyhow::bail!("error while calling IoTHubModuleClient_SetModuleMethodCallback()",);
+                anyhow::bail!("error while calling IoTHubModuleClient_SetModuleMethodCallback()");
             }
 
             Ok(())
@@ -295,7 +295,7 @@ impl Twin for ModuleTwin {
                     value,
                 )
             {
-                anyhow::bail!("error while calling IoTHubModuleClient_SetOption()",);
+                anyhow::bail!("error while calling IoTHubModuleClient_SetOption()");
             }
 
             Ok(())
@@ -346,7 +346,7 @@ impl Twin for DeviceTwin {
             );
 
             if result != IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK {
-                anyhow::bail!("error while calling IoTHubDeviceClient_SendEventAsync()",);
+                anyhow::bail!("error while calling IoTHubDeviceClient_SendEventAsync()");
             }
 
             Ok(())
@@ -370,7 +370,7 @@ impl Twin for DeviceTwin {
                     ctx,
                 )
             {
-                anyhow::bail!("error while calling IoTHubDeviceClient_SendReportedState()",);
+                anyhow::bail!("error while calling IoTHubDeviceClient_SendReportedState()");
             }
 
             Ok(())
@@ -412,7 +412,7 @@ impl Twin for DeviceTwin {
                     ctx,
                 )
             {
-                anyhow::bail!("error while calling IoTHubDeviceClient_SetMessageCallback()",);
+                anyhow::bail!("error while calling IoTHubDeviceClient_SetMessageCallback()");
             }
 
             Ok(())
@@ -432,7 +432,7 @@ impl Twin for DeviceTwin {
                     ctx,
                 )
             {
-                anyhow::bail!("error while calling IoTHubDeviceClient_SetDeviceTwinCallback()",);
+                anyhow::bail!("error while calling IoTHubDeviceClient_SetDeviceTwinCallback()");
             }
 
             Ok(())
@@ -448,7 +448,7 @@ impl Twin for DeviceTwin {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubDeviceClient_GetTwinAsync(self.handle.expect("no handle"), callback, ctx)
             {
-                anyhow::bail!("error while calling IoTHubDeviceClient_GetTwinAsync()",);
+                anyhow::bail!("error while calling IoTHubDeviceClient_GetTwinAsync()");
             }
 
             Ok(())
@@ -468,7 +468,7 @@ impl Twin for DeviceTwin {
                     ctx,
                 )
             {
-                anyhow::bail!("error while calling IoTHubDeviceClient_SetDeviceMethodCallback()",);
+                anyhow::bail!("error while calling IoTHubDeviceClient_SetDeviceMethodCallback()");
             }
 
             Ok(())
@@ -484,7 +484,7 @@ impl Twin for DeviceTwin {
                     value,
                 )
             {
-                anyhow::bail!("error while calling IoTHubDeviceClient_SetOption()",);
+                anyhow::bail!("error while calling IoTHubDeviceClient_SetOption()");
             }
 
             Ok(())

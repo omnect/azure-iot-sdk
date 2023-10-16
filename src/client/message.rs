@@ -139,7 +139,7 @@ impl IotMessage {
                 let v = IoTHubMessage_GetProperty(handle, k.as_ptr());
 
                 if v.is_null() {
-                    info!("IoTHubMessage_GetProperty: no value found for: {:?}", k);
+                    info!("IoTHubMessage_GetProperty: no value found for: {k:?}");
                 } else {
                     properties.insert(k, CStr::from_ptr(v).to_owned());
                 }
@@ -178,13 +178,13 @@ impl IotMessage {
                         IoTHubMessage_SetContentEncodingSystemProperty(handle, value.as_ptr())
                     }
                     _ => {
-                        error!("unknown system property found for key: {}", key);
+                        error!("unknown system property found for key: {key}");
                         IOTHUB_MESSAGE_RESULT_TAG_IOTHUB_MESSAGE_OK
                     }
                 };
 
                 if res != IOTHUB_MESSAGE_RESULT_TAG_IOTHUB_MESSAGE_OK {
-                    anyhow::bail!("error while setting system property for key: {}", key);
+                    anyhow::bail!("error while setting system property for key: {key}");
                 }
             }
 

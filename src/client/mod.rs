@@ -541,7 +541,7 @@ impl IotHub for IotHubClient {
         let queue = message.output_queue.clone();
         let (tx, rx) = oneshot::channel::<bool>();
 
-        debug!("send_d2c_message: {queue:#?}");
+        debug!("send_d2c_message: {queue:?}");
 
         self.twin.send_event_to_output_async(
             handle,
@@ -575,7 +575,7 @@ impl IotHub for IotHubClient {
     /// }
     /// ```
     fn twin_report(&mut self, reported: serde_json::Value) -> Result<()> {
-        debug!("send reported: {}", reported.to_string());
+        debug!("send reported: {reported:?}");
 
         let reported_state = CString::new(reported.to_string())?;
         let size = reported_state.as_bytes().len();
@@ -657,7 +657,7 @@ impl IotHubClient {
 
             match IOTHUB_INIT_RESULT {
                 0 => Ok(()),
-                _ => anyhow::bail!("error while IoTHub_Init()",),
+                _ => anyhow::bail!("error while IoTHub_Init()"),
             }
         }
     }
@@ -799,7 +799,7 @@ impl IotHubClient {
                             IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_ASYNC_ACK
                         }
                         Ok(Err(e)) => {
-                            error!("cannot handle c2d message: {}", e);
+                            error!("cannot handle c2d message: {e}");
                             IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_REJECTED
                         }
                         Err(e) => {
@@ -850,7 +850,7 @@ impl IotHubClient {
                     ),
                 };
             }
-            Err(e) => error!("desired twin cannot be parsed: {}", e),
+            Err(e) => error!("desired twin cannot be parsed: {e}"),
         }
     }
 
@@ -886,7 +886,7 @@ impl IotHubClient {
         let method_name = match CStr::from_ptr(method_name).to_str() {
             Ok(name) => name,
             Err(e) => {
-                error!("cannot parse method name: {}", e);
+                error!("cannot parse method name: {e}");
                 return METHOD_RESPONSE_ERROR;
             }
         };
@@ -919,11 +919,11 @@ impl IotHubClient {
 
             match rx_result.blocking_recv() {
                 Ok(Ok(None)) => {
-                    debug!("Method has no result");
+                    debug!("direct method has no result");
                     return METHOD_RESPONSE_SUCCESS;
                 }
                 Ok(Ok(Some(result))) => {
-                    debug!("Result: {}", result.to_string());
+                    debug!("direct method result: {result:?}");
 
                     match CString::new(result.to_string()) {
                         Ok(r) => {
@@ -936,15 +936,19 @@ impl IotHubClient {
                         }
                     }
                 }
-                Ok(Err(e)) => match CString::new(json!(e.to_string()).to_string()) {
-                    Ok(r) => {
-                        *response_size = r.as_bytes().len();
-                        *response = r.into_raw() as *mut u8;
+                Ok(Err(e)) => {
+                    error!("direct method error: {e:?}");
+
+                    match CString::new(json!(e.to_string()).to_string()) {
+                        Ok(r) => {
+                            *response_size = r.as_bytes().len();
+                            *response = r.into_raw() as *mut u8;
+                        }
+                        Err(e) => {
+                            error!("cannot parse direct method result: {e}");
+                        }
                     }
-                    Err(e) => {
-                        error!("cannot parse direct method result: {e}");
-                    }
-                },
+                }
                 Err(e) => {
                     error!("channel unexpectedly closed: {e}");
                 }
