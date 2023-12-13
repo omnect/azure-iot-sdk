@@ -5,9 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.6] Q4 2023
+ - updated eis-utils to 0.3.2
+
 ## [0.11.5] Q4 2023
  - improved direct method logs
- - unified string formatting 
+ - unified string formatting
 
 ## [0.11.4] Q4 2023
  - replaced dependency url-encoded with url crate
