@@ -120,7 +120,7 @@ mod twin;
 
 static mut IOTHUB_INIT_RESULT: i32 = -1;
 static IOTHUB_INIT_ONCE: Once = Once::new();
-static DO_WORK_FREQUENCY_IN_MS: &str = "DO_WORK_FREQUENCY_IN_MS";
+static AZURE_SDK_DO_WORK_FREQUENCY_IN_MS: &str = "AZURE_SDK_DO_WORK_FREQUENCY_IN_MS";
 static DO_WORK_FREQUENCY_RANGE_IN_MS: std::ops::RangeInclusive<u64> = 0..=100;
 
 #[cfg(any(feature = "module_client", feature = "device_client"))]
@@ -693,7 +693,7 @@ impl IotHubClient {
     }
 
     fn set_options(&mut self) -> Result<()> {
-        if let Ok(freq) = env::var(DO_WORK_FREQUENCY_IN_MS) {
+        if let Ok(freq) = env::var(AZURE_SDK_DO_WORK_FREQUENCY_IN_MS) {
             match freq.parse::<u64>() {
                 Ok(freq) if DO_WORK_FREQUENCY_RANGE_IN_MS.contains(&freq) => {
                     let mut mut_freq = freq;

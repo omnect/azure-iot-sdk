@@ -35,7 +35,7 @@ In order to create the purposed iot client, the crate must be configured via car
 
 ### do_work frequency
 
-The underlying azure-iot-sdk-c runs its main loop every 1ms by default. This timing can be changed in a range of 1...100ms by setting `DO_WORK_FREQUENCY_IN_MS` environment variable.
+The underlying azure-iot-sdk-c runs its main loop every 1ms by default. This timing can be changed in a range of 1...100ms by setting `AZURE_SDK_DO_WORK_FREQUENCY_IN_MS` environment variable.
 
 # Generate documentation
 
