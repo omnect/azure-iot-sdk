@@ -8,6 +8,7 @@ A reference implementation showing how this framework might be used can be found
 # Build
 
 ## Dependencies
+
 Please refer to [azure-iot-sdk-sys](https://github.com/omnect/azure-iot-sdk-sys/blob/main/README.md) documentation in order to provide mandatory libraries needed to build azure-iot-sdk successfully.
 
 An error output similar to the following example indicates that libraries are not set correctly:
@@ -25,10 +26,16 @@ No package 'azure-iotedge-sdk-dev' found
 
 ## Configuration
 
+### Client type
+
 In order to create the purposed iot client, the crate must be configured via cargo feature to one of the following types:
 - `device_client`
 - `module_client`
 - `edge_client`
+
+### do_work frequency
+
+The underlying azure-iot-sdk-c runs its main loop every 1ms by default. This timing can be changed in a range of 1...100ms by setting `DO_WORK_FREQUENCY_IN_MS` environment variable.
 
 # Generate documentation
 
