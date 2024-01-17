@@ -35,6 +35,7 @@ use serde_json::json;
 use std::time::SystemTime;
 use std::{
     boxed::Box,
+    env,
     ffi::{c_void, CStr, CString},
     mem, str,
     sync::Once,
@@ -119,6 +120,8 @@ mod twin;
 
 static mut IOTHUB_INIT_RESULT: i32 = -1;
 static IOTHUB_INIT_ONCE: Once = Once::new();
+static AZURE_SDK_DO_WORK_FREQUENCY_IN_MS: &str = "AZURE_SDK_DO_WORK_FREQUENCY_IN_MS";
+static DO_WORK_FREQUENCY_RANGE_IN_MS: std::ops::RangeInclusive<u64> = 0..=100;
 
 #[cfg(any(feature = "module_client", feature = "device_client"))]
 macro_rules! days_to_secs {
@@ -690,6 +693,20 @@ impl IotHubClient {
     }
 
     fn set_options(&mut self) -> Result<()> {
+        if let Ok(freq) = env::var(AZURE_SDK_DO_WORK_FREQUENCY_IN_MS) {
+            match freq.parse::<u64>() {
+                Ok(freq) if DO_WORK_FREQUENCY_RANGE_IN_MS.contains(&freq) => {
+                    let mut mut_freq = freq;
+                    debug!("set do_work frequency to {mut_freq}ms");
+                    self.twin.set_option(
+                        CString::new("do_work_freq_ms")?,
+                        &mut mut_freq as *mut uint_fast64_t as *mut c_void,
+                    )?;
+                }
+                _ => error!("ignore do_work frequency {freq} since not in range of {DO_WORK_FREQUENCY_RANGE_IN_MS:?}ms"),
+            };
+        }
+
         if cfg!(feature = "iot_c_sdk_logs") {
             self.twin.set_option(
                 CString::new("logtrace")?,
