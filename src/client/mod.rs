@@ -708,7 +708,7 @@ impl IotHubClient {
             };
         }
 
-        if let Ok(_) = env::var(AZURE_SDK_LOGGING) {
+        if env::var(AZURE_SDK_LOGGING).is_ok() {
             self.twin.set_option(
                 CString::new("logtrace")?,
                 &mut true as *mut bool as *mut c_void,
