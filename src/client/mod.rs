@@ -120,6 +120,7 @@ mod twin;
 
 static mut IOTHUB_INIT_RESULT: i32 = -1;
 static IOTHUB_INIT_ONCE: Once = Once::new();
+static AZURE_SDK_LOGGING: &str = "AZURE_SDK_LOGGING";
 static AZURE_SDK_DO_WORK_FREQUENCY_IN_MS: &str = "AZURE_SDK_DO_WORK_FREQUENCY_IN_MS";
 static DO_WORK_FREQUENCY_RANGE_IN_MS: std::ops::RangeInclusive<u64> = 0..=100;
 
@@ -707,7 +708,7 @@ impl IotHubClient {
             };
         }
 
-        if cfg!(feature = "iot_c_sdk_logs") {
+        if env::var(AZURE_SDK_LOGGING).is_ok() {
             self.twin.set_option(
                 CString::new("logtrace")?,
                 &mut true as *mut bool as *mut c_void,

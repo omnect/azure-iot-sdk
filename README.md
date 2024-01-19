@@ -37,6 +37,10 @@ In order to create the purposed iot client, the crate must be configured via car
 
 The underlying azure-iot-sdk-c runs its main loop every 1ms by default. This timing can be changed in a range of 1...100ms by setting `AZURE_SDK_DO_WORK_FREQUENCY_IN_MS` environment variable.
 
+### Logging
+
+The underlying azure-iot-sdk-c logging can be enabled by creating `AZURE_SDK_LOGGING` environment variable with a whatsoever value.
+
 # Generate documentation
 
 The rustdoc documentation of the SDK is not published yet but can be locally created by `cargo doc --lib --no-deps --open`.
