@@ -39,7 +39,7 @@ The underlying azure-iot-sdk-c runs its main loop every 1ms by default. This tim
 
 ### Logging
 
-The underlying azure-iot-sdk-c logging can be enabled by setting `AZURE_SDK_LOGGING` environment variable.
+The underlying azure-iot-sdk-c logging can be enabled by creating `AZURE_SDK_LOGGING` environment variable with a whatsoever value.
 
 # Generate documentation
 
