@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.9] Q1 2024
+ - set default do_work frequency to 100ms 
+
 ## [0.11.8] Q1 2024
  - added environment variable to optionally enable azure-iot-sdk-c logging 
 

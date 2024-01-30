@@ -29,7 +29,7 @@ use core::slice;
 #[cfg(any(feature = "module_client", feature = "device_client"))]
 use eis_utils::*;
 use futures::task;
-use log::{debug, error, trace};
+use log::{debug, error, info, trace};
 use serde_json::json;
 #[cfg(any(feature = "module_client", feature = "device_client"))]
 use std::time::SystemTime;
@@ -123,6 +123,7 @@ static IOTHUB_INIT_ONCE: Once = Once::new();
 static AZURE_SDK_LOGGING: &str = "AZURE_SDK_LOGGING";
 static AZURE_SDK_DO_WORK_FREQUENCY_IN_MS: &str = "AZURE_SDK_DO_WORK_FREQUENCY_IN_MS";
 static DO_WORK_FREQUENCY_RANGE_IN_MS: std::ops::RangeInclusive<u64> = 0..=100;
+static DO_WORK_FREQUENCY_DEFAULT_IN_MS: u64 = 100;
 
 #[cfg(any(feature = "module_client", feature = "device_client"))]
 macro_rules! days_to_secs {
@@ -694,19 +695,27 @@ impl IotHubClient {
     }
 
     fn set_options(&mut self) -> Result<()> {
+        let mut do_work_freq = None;
+
         if let Ok(freq) = env::var(AZURE_SDK_DO_WORK_FREQUENCY_IN_MS) {
             match freq.parse::<u64>() {
                 Ok(freq) if DO_WORK_FREQUENCY_RANGE_IN_MS.contains(&freq) => {
-                    let mut mut_freq = freq;
-                    debug!("set do_work frequency to {mut_freq}ms");
-                    self.twin.set_option(
-                        CString::new("do_work_freq_ms")?,
-                        &mut mut_freq as *mut uint_fast64_t as *mut c_void,
-                    )?;
+                    info!("set do_work frequency {freq}ms");
+                    do_work_freq = Some(freq);
                 }
                 _ => error!("ignore do_work frequency {freq} since not in range of {DO_WORK_FREQUENCY_RANGE_IN_MS:?}ms"),
             };
         }
+
+        if do_work_freq.is_none() {
+            do_work_freq = Some(DO_WORK_FREQUENCY_DEFAULT_IN_MS);
+            info!("set default do_work frequency {DO_WORK_FREQUENCY_DEFAULT_IN_MS}ms")
+        }
+        
+        self.twin.set_option(
+            CString::new("do_work_freq_ms")?,
+             do_work_freq.as_mut().unwrap() as *mut uint_fast64_t as *mut c_void,
+        )?;
 
         if env::var(AZURE_SDK_LOGGING).is_ok() {
             self.twin.set_option(
