@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - outgoing message confirmation timeout:
    - increased from 5s to 10s
    - made configurable by AZURE_SDK_CONFIRMATION_TIMEOUT_IN_SECS environment variable
-   - metioned in README.md
+   - mentioned in README.md
 
 ## [0.11.9] Q1 2024
  - set default do_work frequency to 100ms 
