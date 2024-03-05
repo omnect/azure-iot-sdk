@@ -37,6 +37,10 @@ In order to create the purposed iot client, the crate must be configured via car
 
 The underlying azure-iot-sdk-c runs its main loop every 1ms by default. This timing can be changed in a range of 1...100ms by setting `AZURE_SDK_DO_WORK_FREQUENCY_IN_MS` environment variable.
 
+### Outgoing message confirmation timeout
+
+The sdk expects a valid confirmation after a reported property was updated or a device to cloud (D2C) message was sent. The sdk panics in case the confirmation cannot be received in time. The corresponding timeout can be configured by setting AZURE_SDK_CONFIRMATION_TIMEOUT_IN_SECS environment variable.
+
 ### Logging
 
 The underlying azure-iot-sdk-c logging can be enabled by creating `AZURE_SDK_LOGGING` environment variable with a whatsoever value.

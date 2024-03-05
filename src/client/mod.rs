@@ -118,12 +118,12 @@ mod message;
 /// client implementation, either device, module or edge
 mod twin;
 
-static mut IOTHUB_INIT_RESULT: i32 = -1;
-static IOTHUB_INIT_ONCE: Once = Once::new();
 static AZURE_SDK_LOGGING: &str = "AZURE_SDK_LOGGING";
 static AZURE_SDK_DO_WORK_FREQUENCY_IN_MS: &str = "AZURE_SDK_DO_WORK_FREQUENCY_IN_MS";
 static DO_WORK_FREQUENCY_RANGE_IN_MS: std::ops::RangeInclusive<u64> = 0..=100;
 static DO_WORK_FREQUENCY_DEFAULT_IN_MS: u64 = 100;
+static AZURE_SDK_CONFIRMATION_TIMEOUT_IN_SECS: &str = "AZURE_SDK_CONFIRMATION_TIMEOUT_IN_SECS";
+static CONFIRMATION_TIMEOUT_DEFAULT_IN_SECS: u64 = 10;
 
 #[cfg(any(feature = "module_client", feature = "device_client"))]
 macro_rules! days_to_secs {
@@ -644,7 +644,7 @@ impl IotHub for IotHubClient {
     async fn shutdown(&mut self) {
         let mut poll = Some(Ok::<_, JoinError>(()));
 
-        // join shouldn't take much longer than CONFIRMATION_TIMEOUT_SECS
+        // join shouldn't take much longer than timeout used in spawn_confirmation function
         while poll.is_some() {
             poll = self.confirmation_set.join_next().await;
         }
@@ -652,9 +652,10 @@ impl IotHub for IotHubClient {
 }
 
 impl IotHubClient {
-    const CONFIRMATION_TIMEOUT_SECS: u64 = 5;
-
     fn iothub_init() -> Result<()> {
+        static IOTHUB_INIT_ONCE: Once = Once::new();
+        static mut IOTHUB_INIT_RESULT: i32 = -1;
+
         unsafe {
             IOTHUB_INIT_ONCE.call_once(|| {
                 IOTHUB_INIT_RESULT = IoTHub_Init();
@@ -711,10 +712,10 @@ impl IotHubClient {
             do_work_freq = Some(DO_WORK_FREQUENCY_DEFAULT_IN_MS);
             info!("set default do_work frequency {DO_WORK_FREQUENCY_DEFAULT_IN_MS}ms")
         }
-        
+
         self.twin.set_option(
             CString::new("do_work_freq_ms")?,
-             do_work_freq.as_mut().unwrap() as *mut uint_fast64_t as *mut c_void,
+            do_work_freq.as_mut().unwrap() as *mut uint_fast64_t as *mut c_void,
         )?;
 
         if env::var(AZURE_SDK_LOGGING).is_ok() {
@@ -1031,12 +1032,42 @@ impl IotHubClient {
         //   - failed
         //   - timed out
         self.confirmation_set.spawn(async move {
-            match timeout(Duration::from_secs(Self::CONFIRMATION_TIMEOUT_SECS), rx).await {
+            match timeout(Duration::from_secs(Self::get_confirmation_timeout()), rx).await {
                 Ok(Ok(false)) => panic!("twin_report: failed"),
                 Err(_) => panic!("twin_report: timed out"),
                 _ => trace!("twin_report: succeeded"),
             }
         });
+    }
+
+    fn get_confirmation_timeout() -> u64 {
+        static INIT: Once = Once::new();
+        static mut CONFIRMATION_TIMEOUT_IN_SECS: u64 = CONFIRMATION_TIMEOUT_DEFAULT_IN_SECS;
+
+        unsafe {
+            INIT.call_once(|| {
+                let mut confirmation_timeout_secs = None;
+
+                if let Ok(timeout_secs) = env::var(AZURE_SDK_CONFIRMATION_TIMEOUT_IN_SECS) {
+                    match timeout_secs.parse::<u64>() {
+                        Ok(timeout_secs) => {
+                            info!("set confirmation timeout to {timeout_secs}s");
+                            confirmation_timeout_secs = Some(timeout_secs);
+                        }
+                        _ => error!("ignore invalid confirmation timeout {timeout_secs}"),
+                    };
+                }
+
+                if confirmation_timeout_secs.is_none() {
+                    confirmation_timeout_secs = Some(CONFIRMATION_TIMEOUT_DEFAULT_IN_SECS);
+                    info!(
+                        "set default confirmation timeout {CONFIRMATION_TIMEOUT_DEFAULT_IN_SECS}s"
+                    )
+                }
+                CONFIRMATION_TIMEOUT_IN_SECS = confirmation_timeout_secs.unwrap()
+            });
+            CONFIRMATION_TIMEOUT_IN_SECS
+        }
     }
 }
 
