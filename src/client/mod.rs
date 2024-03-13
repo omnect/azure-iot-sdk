@@ -644,6 +644,8 @@ impl IotHub for IotHubClient {
     async fn shutdown(&mut self) {
         let mut poll = Some(Ok::<_, JoinError>(()));
 
+        info!("shutdown");
+
         // join shouldn't take much longer than timeout used in spawn_confirmation function
         while poll.is_some() {
             poll = self.confirmation_set.join_next().await;
@@ -1022,7 +1024,7 @@ impl IotHubClient {
             poll = self.confirmation_set.poll_join_next(&mut cx);
         }
 
-        trace!(
+        debug!(
             "cleaned {} confirmations",
             before - self.confirmation_set.len()
         );
