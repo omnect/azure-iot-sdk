@@ -39,7 +39,7 @@ The underlying azure-iot-sdk-c runs its main loop every 1ms by default. This tim
 
 ### Outgoing message confirmation timeout
 
-The sdk expects a valid confirmation after a reported property was updated or a device to cloud (D2C) message was sent. The sdk panics in case the confirmation cannot be received in time. The corresponding timeout can be configured by setting AZURE_SDK_CONFIRMATION_TIMEOUT_IN_SECS environment variable.
+The sdk expects a valid confirmation after a reported property was updated or a device to cloud (D2C) message was sent. The sdk panics in case the confirmation cannot be received in time. The corresponding timeout can be configured by setting `AZURE_SDK_CONFIRMATION_TIMEOUT_IN_SECS` environment variable.
 
 ### Logging
 
