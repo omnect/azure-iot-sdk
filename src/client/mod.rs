@@ -29,7 +29,7 @@ use core::slice;
 #[cfg(any(feature = "module_client", feature = "device_client"))]
 use eis_utils::*;
 use futures::task;
-use log::{debug, error, info, trace};
+use log::{debug, error, info, trace, warn};
 use serde_json::json;
 #[cfg(any(feature = "module_client", feature = "device_client"))]
 use std::time::SystemTime;
@@ -123,7 +123,7 @@ static AZURE_SDK_DO_WORK_FREQUENCY_IN_MS: &str = "AZURE_SDK_DO_WORK_FREQUENCY_IN
 static DO_WORK_FREQUENCY_RANGE_IN_MS: std::ops::RangeInclusive<u64> = 0..=100;
 static DO_WORK_FREQUENCY_DEFAULT_IN_MS: u64 = 100;
 static AZURE_SDK_CONFIRMATION_TIMEOUT_IN_SECS: &str = "AZURE_SDK_CONFIRMATION_TIMEOUT_IN_SECS";
-static CONFIRMATION_TIMEOUT_DEFAULT_IN_SECS: u64 = 10;
+static CONFIRMATION_TIMEOUT_DEFAULT_IN_SECS: u64 = 300;
 
 #[cfg(any(feature = "module_client", feature = "device_client"))]
 macro_rules! days_to_secs {
@@ -646,10 +646,16 @@ impl IotHub for IotHubClient {
 
         info!("shutdown");
 
-        // join shouldn't take much longer than timeout used in spawn_confirmation function
-        while poll.is_some() {
-            poll = self.confirmation_set.join_next().await;
-        }
+        /*
+           We abort and join all "wait for pending confirmations" tasks
+           (https://docs.rs/tokio/latest/src/tokio/task/join_set.rs.html#362).
+           This means:
+               - we have a clean shutdown
+               - we shutdown as fast as possible
+               - we DON'T WAIT for pending confirmation
+        */
+
+        self.confirmation_set.shutdown();
     }
 }
 
@@ -1029,15 +1035,17 @@ impl IotHubClient {
             before - self.confirmation_set.len()
         );
 
-        // spawn a task to handle the following results:
-        //   - succeeded
-        //   - failed
-        //   - timed out
+        /*
+            spawn a task to handle the following results:
+                - succeeded
+                - failed
+                - timed out
+        */
         self.confirmation_set.spawn(async move {
             match timeout(Duration::from_secs(Self::get_confirmation_timeout()), rx).await {
-                Ok(Ok(false)) => panic!("twin_report: failed"),
-                Err(_) => panic!("twin_report: timed out"),
-                _ => trace!("twin_report: succeeded"),
+                Ok(Ok(false)) => error!("confirmation failed"),
+                Err(_) => warn!("confirmation timed out"),
+                _ => debug!("confirmation successfully received"),
             }
         });
     }
