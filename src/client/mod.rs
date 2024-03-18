@@ -642,20 +642,18 @@ impl IotHub for IotHubClient {
     /// }
     /// ```
     async fn shutdown(&mut self) {
-        let mut poll = Some(Ok::<_, JoinError>(()));
-
         info!("shutdown");
 
         /*
-            We abort and join all "wait for pending confirmations" tasks
-            (https://docs.rs/tokio/latest/src/tokio/task/join_set.rs.html#362).
-            This means:
-                - we have a clean shutdown
-                - we shutdown as fast as possible
-                - we DON'T WAIT for pending confirmations
-         */
+           We abort and join all "wait for pending confirmations" tasks
+           (https://docs.rs/tokio/latest/src/tokio/task/join_set.rs.html#362).
+           This means:
+               - we have a clean shutdown
+               - we shutdown as fast as possible
+               - we DON'T WAIT for pending confirmations
+        */
 
-        self.confirmation_set.shutdown();
+        self.confirmation_set.shutdown().await;
     }
 }
 
