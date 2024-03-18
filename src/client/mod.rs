@@ -647,13 +647,13 @@ impl IotHub for IotHubClient {
         info!("shutdown");
 
         /*
-           We abort and join all "wait for pending confirmations" tasks
-           (https://docs.rs/tokio/latest/src/tokio/task/join_set.rs.html#362).
-           This means:
-               - we have a clean shutdown
-               - we shutdown as fast as possible
-               - we DON'T WAIT for pending confirmation
-        */
+            We abort and join all "wait for pending confirmations" tasks
+            (https://docs.rs/tokio/latest/src/tokio/task/join_set.rs.html#362).
+            This means:
+                - we have a clean shutdown
+                - we shutdown as fast as possible
+                - we DON'T WAIT for pending confirmations
+         */
 
         self.confirmation_set.shutdown();
     }
@@ -1035,14 +1035,13 @@ impl IotHubClient {
             before - self.confirmation_set.len()
         );
 
-        /*
-            spawn a task to handle the following results:
-                - succeeded
-                - failed
-                - timed out
-        */
+        // spawn a task to handle the following results:
+        //   - succeeded
+        //   - failed
+        //   - timed out
         self.confirmation_set.spawn(async move {
             match timeout(Duration::from_secs(Self::get_confirmation_timeout()), rx).await {
+                // if really needed we could pass around the json of property or D2C msg to get logged here as context
                 Ok(Ok(false)) => error!("confirmation failed"),
                 Err(_) => warn!("confirmation timed out"),
                 _ => debug!("confirmation successfully received"),
