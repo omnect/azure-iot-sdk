@@ -91,7 +91,7 @@ pub trait Twin {
         ctx: *mut std::ffi::c_void,
     ) -> Result<()>;
 
-    fn set_option(&self, option_name: CString, value: *mut std::ffi::c_void) -> Result<()>;
+    fn set_option(&self, option_name: CString, value: *const std::ffi::c_void) -> Result<()>;
 }
 
 #[cfg(feature = "edge_client")]
@@ -286,7 +286,7 @@ impl Twin for ModuleTwin {
         }
     }
 
-    fn set_option(&self, option_name: CString, value: *mut std::ffi::c_void) -> Result<()> {
+    fn set_option(&self, option_name: CString, value: *const std::ffi::c_void) -> Result<()> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubModuleClient_SetOption(
@@ -475,7 +475,7 @@ impl Twin for DeviceTwin {
         }
     }
 
-    fn set_option(&self, option_name: CString, value: *mut std::ffi::c_void) -> Result<()> {
+    fn set_option(&self, option_name: CString, value: *const std::ffi::c_void) -> Result<()> {
         unsafe {
             if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
                 != IoTHubDeviceClient_SetOption(

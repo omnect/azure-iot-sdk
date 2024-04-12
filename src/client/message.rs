@@ -37,7 +37,12 @@ pub enum Direction {
 ///
 /// #[tokio::main]
 /// async fn main() {
-///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
+///     #[cfg(feature = "edge_client")]
+///     let mut client = IotHubClient::builder().build_edge_client().unwrap();
+///     #[cfg(feature = "device_client")]
+///     let mut client = IotHubClient::builder().build_device_client("my-connection-string").unwrap();
+///     #[cfg(feature = "module_client")]
+///     let mut client = IotHubClient::builder().build_module_client("my-connection-string").unwrap();
 ///
 ///     let msg = IotMessage::builder()
 ///         .set_body(
@@ -223,7 +228,12 @@ impl IotMessage {
 ///
 /// #[tokio::main]
 /// async fn main() {
-///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
+///     #[cfg(feature = "edge_client")]
+///     let mut client = IotHubClient::builder().build_edge_client().unwrap();
+///     #[cfg(feature = "device_client")]
+///     let mut client = IotHubClient::builder().build_device_client("my-connection-string").unwrap();
+///     #[cfg(feature = "module_client")]
+///     let mut client = IotHubClient::builder().build_module_client("my-connection-string").unwrap();
 ///
 ///     let msg = IotMessage::builder()
 ///         .set_body(
@@ -257,7 +267,12 @@ impl IotMessageBuilder {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
+    ///     #[cfg(feature = "edge_client")]
+    ///     let mut client = IotHubClient::builder().build_edge_client().unwrap();
+    ///     #[cfg(feature = "device_client")]
+    ///     let mut client = IotHubClient::builder().build_device_client("my-connection-string").unwrap();
+    ///     #[cfg(feature = "module_client")]
+    ///     let mut client = IotHubClient::builder().build_module_client("my-connection-string").unwrap();
     ///
     ///     let msg = IotMessage::builder()
     ///         .set_body(
@@ -280,7 +295,12 @@ impl IotMessageBuilder {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
+    ///     #[cfg(feature = "edge_client")]
+    ///     let mut client = IotHubClient::builder().build_edge_client().unwrap();
+    ///     #[cfg(feature = "device_client")]
+    ///     let mut client = IotHubClient::builder().build_device_client("my-connection-string").unwrap();
+    ///     #[cfg(feature = "module_client")]
+    ///     let mut client = IotHubClient::builder().build_module_client("my-connection-string").unwrap();
     ///
     ///     let msg = IotMessage::builder()
     ///         .set_id("my msg id")
@@ -300,7 +320,12 @@ impl IotMessageBuilder {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
+    ///     #[cfg(feature = "edge_client")]
+    ///     let mut client = IotHubClient::builder().build_edge_client().unwrap();
+    ///     #[cfg(feature = "device_client")]
+    ///     let mut client = IotHubClient::builder().build_device_client("my-connection-string").unwrap();
+    ///     #[cfg(feature = "module_client")]
+    ///     let mut client = IotHubClient::builder().build_module_client("my-connection-string").unwrap();
     ///
     ///     let msg = IotMessage::builder()
     ///         .set_correlation_id("my correlation id")
@@ -321,7 +346,12 @@ impl IotMessageBuilder {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
+    ///     #[cfg(feature = "edge_client")]
+    ///     let mut client = IotHubClient::builder().build_edge_client().unwrap();
+    ///     #[cfg(feature = "device_client")]
+    ///     let mut client = IotHubClient::builder().build_device_client("my-connection-string").unwrap();
+    ///     #[cfg(feature = "module_client")]
+    ///     let mut client = IotHubClient::builder().build_module_client("my-connection-string").unwrap();
     ///
     ///     let msg = IotMessage::builder()
     ///         .set_content_type("application/json")
@@ -343,7 +373,12 @@ impl IotMessageBuilder {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
+    ///     #[cfg(feature = "edge_client")]
+    ///     let mut client = IotHubClient::builder().build_edge_client().unwrap();
+    ///     #[cfg(feature = "device_client")]
+    ///     let mut client = IotHubClient::builder().build_device_client("my-connection-string").unwrap();
+    ///     #[cfg(feature = "module_client")]
+    ///     let mut client = IotHubClient::builder().build_module_client("my-connection-string").unwrap();
     ///
     ///     let msg = IotMessage::builder()
     ///         .set_content_encoding("UTF-8")
@@ -363,7 +398,12 @@ impl IotMessageBuilder {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
+    ///     #[cfg(feature = "edge_client")]
+    ///     let mut client = IotHubClient::builder().build_edge_client().unwrap();
+    ///     #[cfg(feature = "device_client")]
+    ///     let mut client = IotHubClient::builder().build_device_client("my-connection-string").unwrap();
+    ///     #[cfg(feature = "module_client")]
+    ///     let mut client = IotHubClient::builder().build_module_client("my-connection-string").unwrap();
     ///
     ///     let msg = IotMessage::builder()
     ///         .set_output_queue("my output queue")
@@ -384,7 +424,12 @@ impl IotMessageBuilder {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let mut client = IotHubClient::from_identity_service(None, None, None, None).await.unwrap();
+    ///     #[cfg(feature = "edge_client")]
+    ///     let mut client = IotHubClient::builder().build_edge_client().unwrap();
+    ///     #[cfg(feature = "device_client")]
+    ///     let mut client = IotHubClient::builder().build_device_client("my-connection-string").unwrap();
+    ///     #[cfg(feature = "module_client")]
+    ///     let mut client = IotHubClient::builder().build_module_client("my-connection-string").unwrap();
     ///
     ///     let msg = IotMessage::builder()
     ///         .set_property("my key1", "my property1")
