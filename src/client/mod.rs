@@ -52,17 +52,6 @@ mod message;
 /// client implementation, either device, module or edge
 mod twin;
 
-/// DirectMethod
-pub struct DirectMethod {
-    name: String,
-    payload: serde_json::Value,
-    responder: DirectMethodResponder,
-}
-/// Result used by iothub client consumer to send the result of a direct method
-pub type DirectMethodResponder = oneshot::Sender<Result<Option<serde_json::Value>>>;
-/// Sender used to signal a direct method to the iothub client consumer
-pub type DirectMethodSender = mpsc::Sender<DirectMethod>;
-
 /// Trait which provides functions for communication with azure iothub
 #[async_trait(?Send)]
 pub trait IotHub {
@@ -188,19 +177,42 @@ pub enum AuthenticationStatus {
     Unauthenticated(UnauthenticatedReason),
 }
 
+/// DirectMethod
+pub struct DirectMethod {
+    /// method name
+    pub name: String,
+    /// method payload
+    pub payload: serde_json::Value,
+    /// method responder used by client to return the result
+    pub responder: DirectMethodResponder,
+}
+/// Result used by iothub client consumer to send the result of a direct method
+pub type DirectMethodResponder = oneshot::Sender<Result<Option<serde_json::Value>>>;
+/// Sender used to signal a direct method to the iothub client consumer
+pub type DirectMethodSender = mpsc::Sender<DirectMethod>;
+
+/// IncomingIotMessage
+pub struct IncomingIotMessage {
+    /// [`IotMessage`]
+    pub inner: IotMessage,
+    /// method responder used by client to return [`DispositionResult`]
+    pub responder: DispositionResultResponder,
+}
+/// Result used by iothub client consumer to send the result of a direct method
+pub type DispositionResultResponder = oneshot::Sender<Result<DispositionResult>>;
+/// Sender used to signal a direct method to the iothub client consumer
+pub type IotMessageSender = mpsc::Sender<IncomingIotMessage>;
+
 /// Provides a channel and a property array to receive incoming cloud to device messages
 #[derive(Clone, Debug)]
 pub struct IncomingMessageObserver {
-    observer: mpsc::Sender<(IotMessage, oneshot::Sender<Result<DispositionResult>>)>,
+    observer: IotMessageSender,
     properties: Vec<String>,
 }
 
 impl IncomingMessageObserver {
     /// Creates a new instance of [`IncomingMessageObserver`]
-    pub fn new(
-        observer: mpsc::Sender<(IotMessage, oneshot::Sender<Result<DispositionResult>>)>,
-        properties: Vec<String>,
-    ) -> Self {
+    pub fn new(observer: IotMessageSender, properties: Vec<String>) -> Self {
         IncomingMessageObserver {
             observer,
             properties,
@@ -1188,7 +1200,10 @@ impl IotHubClient {
 
                     observer
                         .observer
-                        .blocking_send((msg, tx_result))
+                        .blocking_send(IncomingIotMessage {
+                            inner: msg,
+                            responder: tx_result,
+                        })
                         .expect("c_c2d_message_callback: cannot blocking_send");
 
                     match rx_result.blocking_recv() {
