@@ -126,6 +126,9 @@ pub trait IotHubBuilder {
         self: Box<Self>,
         tx_incoming_message: IncomingMessageObserver,
     ) -> Box<dyn IotHubBuilder>;
+
+    /// Call this function to set an Azure IoT Plug & Play model id.
+    fn pnp_model_id(self: Box<Self>, model_id: &'static str) -> Box<dyn IotHubBuilder>;
 }
 
 static AZURE_SDK_LOGGING: &str = "AZURE_SDK_LOGGING";
@@ -273,6 +276,7 @@ pub struct IotHubClientBuilder {
     tx_twin_desired: Option<mpsc::Sender<(TwinUpdateState, serde_json::Value)>>,
     tx_direct_method: Option<DirectMethodSender>,
     tx_incoming_message: Option<IncomingMessageObserver>,
+    model_id: Option<&'static str>,
 }
 
 #[async_trait(?Send)]
@@ -328,12 +332,7 @@ impl IotHubBuilder for IotHubClientBuilder {
             "edge client type requires edge_client feature"
         );
 
-        IotHubClient::from_edge_environment(
-            self.tx_connection_status.clone(),
-            self.tx_twin_desired.clone(),
-            self.tx_direct_method.clone(),
-            self.tx_incoming_message.clone(),
-        )
+        IotHubClient::from_edge_environment(&self)
     }
 
     #[cfg(feature = "device_client")]
@@ -387,13 +386,7 @@ impl IotHubBuilder for IotHubClientBuilder {
             "device client type requires device_client feature"
         );
 
-        IotHubClient::from_connection_string(
-            connection_string,
-            self.tx_connection_status.clone(),
-            self.tx_twin_desired.clone(),
-            self.tx_direct_method.clone(),
-            self.tx_incoming_message.clone(),
-        )
+        IotHubClient::from_connection_string(connection_string, &self)
     }
 
     #[cfg(feature = "module_client")]
@@ -447,13 +440,7 @@ impl IotHubBuilder for IotHubClientBuilder {
             "module client type requires module_client feature"
         );
 
-        IotHubClient::from_connection_string(
-            connection_string,
-            self.tx_connection_status.clone(),
-            self.tx_twin_desired.clone(),
-            self.tx_direct_method.clone(),
-            self.tx_incoming_message.clone(),
-        )
+        IotHubClient::from_connection_string(connection_string, &self)
     }
 
     #[cfg(feature = "module_client")]
@@ -509,13 +496,7 @@ impl IotHubBuilder for IotHubClientBuilder {
             "module client type requires module_client feature"
         );
 
-        IotHubClient::from_identity_service(
-            self.tx_connection_status.clone(),
-            self.tx_twin_desired.clone(),
-            self.tx_direct_method.clone(),
-            self.tx_incoming_message.clone(),
-        )
-        .await
+        IotHubClient::from_identity_service(&self).await
     }
 
     /// Add connection state observer
@@ -675,6 +656,36 @@ impl IotHubBuilder for IotHubClientBuilder {
         self.tx_incoming_message = Some(tx_incoming_message);
         self
     }
+
+    /// Set an Azure IoT Plug & Play model id.
+    /// ```no_run
+    /// use azure_iot_sdk::client::*;
+    /// use std::{thread, time};
+    /// use tokio::{select, sync::mpsc};
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     #[cfg(feature = "edge_client")]
+    ///     let mut client = IotHubClient::builder()
+    ///         .pnp_model_id("my.pnp.id")
+    ///         .build_edge_client()
+    ///         .unwrap();
+    ///     #[cfg(feature = "device_client")]
+    ///     let mut client = IotHubClient::builder()
+    ///         .pnp_model_id("my.pnp.id")
+    ///         .build_device_client("my-connection-string")
+    ///         .unwrap();
+    ///     #[cfg(feature = "module_client")]
+    ///     let mut client = IotHubClient::builder()
+    ///         .pnp_model_id("my.pnp.id")
+    ///         .build_module_client("my-connection-string")
+    ///         .unwrap();
+    /// }
+    /// ```
+    fn pnp_model_id(mut self: Box<Self>, model_id: &'static str) -> Box<dyn IotHubBuilder> {
+        self.model_id = Some(model_id);
+        self
+    }
 }
 
 /// iothub client to be instantiated in order to initiate iothub communication
@@ -730,6 +741,7 @@ pub struct IotHubClient {
     tx_twin_desired: Option<mpsc::Sender<(TwinUpdateState, serde_json::Value)>>,
     tx_direct_method: Option<DirectMethodSender>,
     tx_incoming_message: Option<IncomingMessageObserver>,
+    model_id: Option<&'static str>,
     confirmation_set: JoinSet<()>,
 }
 
@@ -930,12 +942,7 @@ impl IotHub for IotHubClient {
 
 impl IotHubClient {
     #[cfg(feature = "edge_client")]
-    pub(crate) fn from_edge_environment(
-        tx_connection_status: Option<mpsc::Sender<AuthenticationStatus>>,
-        tx_twin_desired: Option<mpsc::Sender<(TwinUpdateState, serde_json::Value)>>,
-        tx_direct_method: Option<DirectMethodSender>,
-        tx_incoming_message: Option<IncomingMessageObserver>,
-    ) -> Result<Box<dyn IotHub>> {
+    pub(crate) fn from_edge_environment(params: &IotHubClientBuilder) -> Result<Box<dyn IotHub>> {
         #[cfg(not(feature = "edge_client"))]
         anyhow::bail!(
             "only edge modules can connect via from_edge_environment(). either use from_identity_service() or from_connection_string().",
@@ -951,10 +958,11 @@ impl IotHubClient {
 
             let mut client = Box::new(IotHubClient {
                 twin,
-                tx_connection_status,
-                tx_twin_desired,
-                tx_direct_method,
-                tx_incoming_message,
+                tx_connection_status: params.tx_connection_status.clone(),
+                tx_twin_desired: params.tx_twin_desired.clone(),
+                tx_direct_method: params.tx_direct_method.clone(),
+                tx_incoming_message: params.tx_incoming_message.clone(),
+                model_id: params.model_id,
                 confirmation_set: JoinSet::new(),
             });
 
@@ -968,10 +976,7 @@ impl IotHubClient {
 
     #[cfg(feature = "module_client")]
     pub(crate) async fn from_identity_service(
-        _tx_connection_status: Option<mpsc::Sender<AuthenticationStatus>>,
-        _tx_twin_desired: Option<mpsc::Sender<(TwinUpdateState, serde_json::Value)>>,
-        _tx_direct_method: Option<DirectMethodSender>,
-        _tx_incoming_message: Option<IncomingMessageObserver>,
+        params: &IotHubClientBuilder,
     ) -> Result<Box<dyn IotHub>> {
         let connection_info = request_connection_string_from_eis_with_expiry(
                 SystemTime::now()
@@ -992,22 +997,13 @@ impl IotHubClient {
             connection_info.connection_string.as_str()
         );
 
-        IotHubClient::from_connection_string(
-            connection_info.connection_string.as_str(),
-            _tx_connection_status,
-            _tx_twin_desired,
-            _tx_direct_method,
-            _tx_incoming_message,
-        )
+        IotHubClient::from_connection_string(connection_info.connection_string.as_str(), params)
     }
 
     #[cfg(any(feature = "module_client", feature = "device_client"))]
     pub(crate) fn from_connection_string(
         connection_string: &str,
-        tx_connection_status: Option<mpsc::Sender<AuthenticationStatus>>,
-        tx_twin_desired: Option<mpsc::Sender<(TwinUpdateState, serde_json::Value)>>,
-        tx_direct_method: Option<DirectMethodSender>,
-        tx_incoming_message: Option<IncomingMessageObserver>,
+        params: &IotHubClientBuilder,
     ) -> Result<Box<dyn IotHub + 'static>> {
         IotHubClient::iothub_init()?;
 
@@ -1021,10 +1017,11 @@ impl IotHubClient {
 
         let mut client = Box::new(IotHubClient {
             twin,
-            tx_connection_status,
-            tx_twin_desired,
-            tx_direct_method,
-            tx_incoming_message,
+            tx_connection_status: params.tx_connection_status.clone(),
+            tx_twin_desired: params.tx_twin_desired.clone(),
+            tx_direct_method: params.tx_direct_method.clone(),
+            tx_incoming_message: params.tx_incoming_message.clone(),
+            model_id: params.model_id,
             confirmation_set: JoinSet::new(),
         });
 
@@ -1108,11 +1105,14 @@ impl IotHubClient {
             )?
         }
 
-        let model_id = CString::new("dtmi:azure:iot:deviceUpdateContractModel;3")?;
-        self.twin.set_option(
-            CString::new("model_id")?,
-            model_id.as_ptr() as *const c_void,
-        )?;
+        if let Some(model_id) = self.model_id {
+            info!("set pnp model id: {model_id}");
+            let model_id = CString::new(model_id)?;
+            self.twin.set_option(
+                CString::new("model_id")?,
+                model_id.as_ptr() as *const c_void,
+            )?;
+        }
 
         Ok(())
     }
