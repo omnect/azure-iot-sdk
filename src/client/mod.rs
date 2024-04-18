@@ -22,8 +22,7 @@ use self::twin::DeviceTwin;
 #[cfg(any(feature = "module_client", feature = "edge_client"))]
 use crate::client::twin::ModuleTwin;
 use crate::client::twin::Twin;
-use anyhow::{ensure, Result};
-use async_trait::async_trait;
+use anyhow::Result;
 use azure_iot_sdk_sys::*;
 use core::slice;
 #[cfg(feature = "module_client")]
@@ -51,92 +50,6 @@ use tokio::{
 mod message;
 /// client implementation, either device, module or edge
 mod twin;
-
-/// Trait which provides functions for communication with azure iothub
-#[async_trait(?Send)]
-pub trait IotHub {
-    /// Call this function to get a builder for an IotHub.
-    fn builder() -> Box<dyn IotHubBuilder>
-    where
-        Self: Sized;
-
-    /// Call this function in order to get the underlying azure-sdk-c version string.
-    fn sdk_version_string() -> String
-    where
-        Self: Sized;
-
-    /// Call this function to get the configured [`ClientType`].
-    fn client_type() -> ClientType
-    where
-        Self: Sized;
-
-    /// Call this function to trigger a twin update that is asynchronously signaled as twin_desired stream.
-    fn twin_async(&mut self) -> Result<()>;
-
-    /// Call this function to send a message (D2C) to iothub.
-    fn send_d2c_message(&mut self, message: IotMessage) -> Result<()>;
-
-    /// Call this function to report twin properties to iothub.
-    fn twin_report(&mut self, reported: serde_json::Value) -> Result<()>;
-
-    /// Call this function to properly shutdown IotHub. All reported properties and D2C messages will be
-    /// continued to completion.
-    async fn shutdown(&mut self);
-}
-
-/// Trait which provides functions for communication with azure iothub
-#[async_trait(?Send)]
-pub trait IotHubBuilder {
-    #[cfg(feature = "edge_client")]
-    /// Call this function in order to build an instance of an edge client based [`IotHubClient`].
-    fn build_edge_client(&self) -> Result<Box<dyn IotHub>>;
-
-    #[cfg(feature = "device_client")]
-    /// Call this function in order to build an instance of a device client based [`IotHubClient`].
-    fn build_device_client(&self, connection_string: &str) -> Result<Box<dyn IotHub>>;
-
-    #[cfg(feature = "module_client")]
-    /// Call this function in order to build an instance of a module client based [`IotHubClient`] by connection string.
-    fn build_module_client(&self, connection_string: &str) -> Result<Box<dyn IotHub>>;
-
-    #[cfg(feature = "module_client")]
-    /// Call this function in order to build an instance of a module client based [`IotHubClient`] by identity service.
-    async fn build_module_client_from_identity(&self) -> Result<Box<dyn IotHub>>;
-
-    /// Call this function to observe connection state.
-    fn observe_connection_state(
-        self: Box<Self>,
-        tx_connection_status: mpsc::Sender<AuthenticationStatus>,
-    ) -> Box<dyn IotHubBuilder>;
-
-    /// Call this function to observe desired properties.
-    fn observe_desired_properties(
-        self: Box<Self>,
-        tx_twin_desired: mpsc::Sender<(TwinUpdateState, serde_json::Value)>,
-    ) -> Box<dyn IotHubBuilder>;
-
-    /// Call this function to observe direct methods.
-    fn observe_direct_methods(
-        self: Box<Self>,
-        tx_direct_method: DirectMethodSender,
-    ) -> Box<dyn IotHubBuilder>;
-
-    /// Call this function to observe incoming messages.
-    fn observe_incoming_messages(
-        self: Box<Self>,
-        tx_incoming_message: IncomingMessageObserver,
-    ) -> Box<dyn IotHubBuilder>;
-
-    /// Call this function to set an Azure IoT Plug & Play model id.
-    fn pnp_model_id(self: Box<Self>, model_id: &'static str) -> Box<dyn IotHubBuilder>;
-
-    /// Call this function to set the restart policy used for connecting to iot-hub.
-    fn retry_policy(
-        self: Box<Self>,
-        policy: RetryPolicy,
-        timeout_secs: u32,
-    ) -> Box<dyn IotHubBuilder>;
-}
 
 static AZURE_SDK_LOGGING: &str = "AZURE_SDK_LOGGING";
 static AZURE_SDK_DO_WORK_FREQUENCY_IN_MS: &str = "AZURE_SDK_DO_WORK_FREQUENCY_IN_MS";
@@ -312,8 +225,7 @@ pub struct IotHubClientBuilder {
     retry_setting: Option<RetrySetting>,
 }
 
-#[async_trait(?Send)]
-impl IotHubBuilder for IotHubClientBuilder {
+impl IotHubClientBuilder {
     #[cfg(feature = "edge_client")]
     /// Call this function in order to build an instance of an edge client based [`IotHubClient`].<br>
     /// ***Note***: this function is only available with "edge_client" feature enabled.
@@ -359,12 +271,7 @@ impl IotHubBuilder for IotHubClientBuilder {
     ///     }
     /// }
     /// ```
-    fn build_edge_client(&self) -> Result<Box<dyn IotHub>> {
-        ensure!(
-            ClientType::Edge == IotHubClient::client_type(),
-            "edge client type requires edge_client feature"
-        );
-
+    pub fn build_edge_client(&self) -> Result<IotHubClient> {
         IotHubClient::from_edge_environment(self)
     }
 
@@ -413,13 +320,8 @@ impl IotHubBuilder for IotHubClientBuilder {
     ///     }
     /// }
     /// ```
-    fn build_device_client(&self, connection_string: &str) -> Result<Box<dyn IotHub>> {
-        ensure!(
-            ClientType::Device == IotHubClient::client_type(),
-            "device client type requires device_client feature"
-        );
-
-        IotHubClient::from_connection_string(connection_string, &self)
+    pub fn build_device_client(&self, connection_string: &str) -> Result<IotHubClient> {
+        IotHubClient::from_connection_string(connection_string, self)
     }
 
     #[cfg(feature = "module_client")]
@@ -467,12 +369,7 @@ impl IotHubBuilder for IotHubClientBuilder {
     ///     }
     /// }
     /// ```
-    fn build_module_client(&self, connection_string: &str) -> Result<Box<dyn IotHub>> {
-        ensure!(
-            ClientType::Module == IotHubClient::client_type(),
-            "module client type requires module_client feature"
-        );
-
+    pub fn build_module_client(&self, connection_string: &str) -> Result<IotHubClient> {
         IotHubClient::from_connection_string(connection_string, self)
     }
 
@@ -523,12 +420,7 @@ impl IotHubBuilder for IotHubClientBuilder {
     ///     }
     /// }
     /// ```
-    async fn build_module_client_from_identity(&self) -> Result<Box<dyn IotHub>> {
-        ensure!(
-            ClientType::Module == IotHubClient::client_type(),
-            "module client type requires module_client feature"
-        );
-
+    pub async fn build_module_client_from_identity(&self) -> Result<IotHubClient> {
         IotHubClient::from_identity_service(self).await
     }
 
@@ -559,10 +451,10 @@ impl IotHubBuilder for IotHubClientBuilder {
     ///     }
     /// }
     /// ```
-    fn observe_connection_state(
-        mut self: Box<Self>,
+    pub fn observe_connection_state(
+        mut self,
         tx_connection_status: mpsc::Sender<AuthenticationStatus>,
-    ) -> Box<dyn IotHubBuilder> {
+    ) -> Self {
         self.tx_connection_status = Some(tx_connection_status);
         self
     }
@@ -594,10 +486,10 @@ impl IotHubBuilder for IotHubClientBuilder {
     ///     }
     /// }
     /// ```
-    fn observe_desired_properties(
-        mut self: Box<Self>,
+    pub fn observe_desired_properties(
+        mut self,
         tx_twin_desired: mpsc::Sender<(TwinUpdateState, serde_json::Value)>,
-    ) -> Box<dyn IotHubBuilder> {
+    ) -> Self {
         self.tx_twin_desired = Some(tx_twin_desired);
         self
     }
@@ -638,10 +530,7 @@ impl IotHubBuilder for IotHubClientBuilder {
     ///     }
     /// }
     /// ```
-    fn observe_direct_methods(
-        mut self: Box<Self>,
-        tx_direct_method: DirectMethodSender,
-    ) -> Box<dyn IotHubBuilder> {
+    pub fn observe_direct_methods(mut self, tx_direct_method: DirectMethodSender) -> Self {
         self.tx_direct_method = Some(tx_direct_method);
         self
     }
@@ -682,10 +571,10 @@ impl IotHubBuilder for IotHubClientBuilder {
     ///     }
     /// }
     /// ```
-    fn observe_incoming_messages(
-        mut self: Box<Self>,
+    pub fn observe_incoming_messages(
+        mut self,
         tx_incoming_message: IncomingMessageObserver,
-    ) -> Box<dyn IotHubBuilder> {
+    ) -> Self {
         self.tx_incoming_message = Some(tx_incoming_message);
         self
     }
@@ -715,7 +604,7 @@ impl IotHubBuilder for IotHubClientBuilder {
     ///         .unwrap();
     /// }
     /// ```
-    fn pnp_model_id(mut self: Box<Self>, model_id: &'static str) -> Box<dyn IotHubBuilder> {
+    pub fn pnp_model_id(mut self, model_id: &'static str) -> Self {
         self.model_id = Some(model_id);
         self
     }
@@ -745,11 +634,7 @@ impl IotHubBuilder for IotHubClientBuilder {
     ///         .unwrap();
     /// }
     /// ```
-    fn retry_policy(
-        mut self: Box<Self>,
-        policy: RetryPolicy,
-        timeout_secs: u32,
-    ) -> Box<dyn IotHubBuilder> {
+    pub fn retry_policy(mut self, policy: RetryPolicy, timeout_secs: u32) -> Self {
         self.retry_setting = Some(RetrySetting {
             policy,
             timeout_secs,
@@ -816,15 +701,14 @@ pub struct IotHubClient {
     confirmation_set: JoinSet<()>,
 }
 
-#[async_trait(?Send)]
-impl IotHub for IotHubClient {
+impl IotHubClient {
     /// Call this function in order to get the underlying azure-sdk-c version string.
     /// ```rust, no_run
     /// use azure_iot_sdk::client::*;
     ///
     /// IotHubClient::sdk_version_string();
     /// ```
-    fn sdk_version_string() -> String {
+    pub fn sdk_version_string() -> String {
         twin::sdk_version_string()
     }
 
@@ -834,7 +718,7 @@ impl IotHub for IotHubClient {
     ///
     /// IotHubClient::client_type();
     /// ```
-    fn client_type() -> ClientType {
+    pub fn client_type() -> ClientType {
         if cfg!(feature = "device_client") {
             ClientType::Device
         } else if cfg!(feature = "module_client") {
@@ -846,8 +730,22 @@ impl IotHub for IotHubClient {
         }
     }
 
-    fn builder() -> Box<dyn IotHubBuilder> {
-        Box::<IotHubClientBuilder>::default()
+    /// Call this function to get a builder to build an instance of [`IotHubClient`].
+    /// ```rust, no_run
+    /// use azure_iot_sdk::client::*;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     #[cfg(feature = "edge_client")]
+    ///     let mut client = IotHubClient::builder().build_edge_client().unwrap();
+    ///     #[cfg(feature = "device_client")]
+    ///     let mut client = IotHubClient::builder().build_device_client("my-connection-string").unwrap();
+    ///     #[cfg(feature = "module_client")]
+    ///     let mut client = IotHubClient::builder().build_module_client("my-connection-string").unwrap();
+    /// }
+    /// ```
+    pub fn builder() -> IotHubClientBuilder {
+        IotHubClientBuilder::default()
     }
 
     /// Call this function to send a message (D2C) to iothub.
@@ -880,7 +778,7 @@ impl IotHub for IotHubClient {
     ///     client.send_d2c_message(msg);
     /// }
     /// ```
-    fn send_d2c_message(&mut self, mut message: IotMessage) -> Result<()> {
+    pub fn send_d2c_message(&mut self, mut message: IotMessage) -> Result<()> {
         let handle = message.create_outgoing_handle()?;
         let queue = message.output_queue.clone();
         let (tx, rx) = oneshot::channel::<bool>();
@@ -923,7 +821,7 @@ impl IotHub for IotHubClient {
     ///     client.twin_report(reported);
     /// }
     /// ```
-    fn twin_report(&mut self, reported: serde_json::Value) -> Result<()> {
+    pub fn twin_report(&mut self, reported: serde_json::Value) -> Result<()> {
         debug!("send reported: {reported:?}");
 
         let reported_state = CString::new(reported.to_string())?;
@@ -959,7 +857,7 @@ impl IotHub for IotHubClient {
     ///     client.twin_async();
     /// }
     /// ```
-    fn twin_async(&mut self) -> Result<()> {
+    pub fn twin_async(&mut self) -> Result<()> {
         debug!("twin_complete: get entire twin");
 
         let context = self as *mut IotHubClient as *mut c_void;
@@ -995,7 +893,7 @@ impl IotHub for IotHubClient {
     ///     client.shutdown();
     /// }
     /// ```
-    async fn shutdown(&mut self) {
+    pub async fn shutdown(&mut self) {
         info!("shutdown");
 
         /*
@@ -1009,47 +907,35 @@ impl IotHub for IotHubClient {
 
         self.confirmation_set.shutdown().await;
     }
-}
 
-impl IotHubClient {
     #[cfg(feature = "edge_client")]
-    pub(crate) fn from_edge_environment(params: &IotHubClientBuilder) -> Result<Box<dyn IotHub>> {
-        #[cfg(not(feature = "edge_client"))]
-        anyhow::bail!(
-            "only edge modules can connect via from_edge_environment(). either use from_identity_service() or from_connection_string().",
-        );
+    pub(crate) fn from_edge_environment(params: &IotHubClientBuilder) -> Result<IotHubClient> {
+        IotHubClient::iothub_init()?;
 
-        #[cfg(feature = "edge_client")]
-        {
-            IotHubClient::iothub_init()?;
+        let mut twin = Box::<ModuleTwin>::default();
 
-            let mut twin = Box::<ModuleTwin>::default();
+        twin.create_from_edge_environment()?;
 
-            twin.create_from_edge_environment()?;
+        let mut client = IotHubClient {
+            twin,
+            tx_connection_status: params.tx_connection_status.clone(),
+            tx_twin_desired: params.tx_twin_desired.clone(),
+            tx_direct_method: params.tx_direct_method.clone(),
+            tx_incoming_message: params.tx_incoming_message.clone(),
+            model_id: params.model_id,
+            retry_setting: params.retry_setting.clone(),
+            confirmation_set: JoinSet::new(),
+        };
 
-            let mut client = Box::new(IotHubClient {
-                twin,
-                tx_connection_status: params.tx_connection_status.clone(),
-                tx_twin_desired: params.tx_twin_desired.clone(),
-                tx_direct_method: params.tx_direct_method.clone(),
-                tx_incoming_message: params.tx_incoming_message.clone(),
-                model_id: params.model_id,
-                retry_setting: params.retry_setting.clone(),
-                confirmation_set: JoinSet::new(),
-            });
+        client.set_callbacks()?;
 
-            client.set_callbacks()?;
+        client.set_options()?;
 
-            client.set_options()?;
-
-            Ok(client)
-        }
+        Ok(client)
     }
 
     #[cfg(feature = "module_client")]
-    pub(crate) async fn from_identity_service(
-        params: &IotHubClientBuilder,
-    ) -> Result<Box<dyn IotHub>> {
+    pub(crate) async fn from_identity_service(params: &IotHubClientBuilder) -> Result<Self> {
         let connection_info = request_connection_string_from_eis_with_expiry(
                 SystemTime::now()
                     .duration_since(SystemTime::UNIX_EPOCH)?
@@ -1076,7 +962,7 @@ impl IotHubClient {
     pub(crate) fn from_connection_string(
         connection_string: &str,
         params: &IotHubClientBuilder,
-    ) -> Result<Box<dyn IotHub + 'static>> {
+    ) -> Result<Self> {
         IotHubClient::iothub_init()?;
 
         #[cfg(feature = "module_client")]
@@ -1087,7 +973,7 @@ impl IotHubClient {
 
         twin.create_from_connection_string(CString::new(connection_string)?)?;
 
-        let mut client = Box::new(IotHubClient {
+        let mut client = IotHubClient {
             twin,
             tx_connection_status: params.tx_connection_status.clone(),
             tx_twin_desired: params.tx_twin_desired.clone(),
@@ -1096,7 +982,7 @@ impl IotHubClient {
             model_id: params.model_id,
             retry_setting: params.retry_setting.clone(),
             confirmation_set: JoinSet::new(),
-        });
+        };
 
         client.set_callbacks()?;
 
