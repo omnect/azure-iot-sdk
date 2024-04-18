@@ -129,6 +129,13 @@ pub trait IotHubBuilder {
 
     /// Call this function to set an Azure IoT Plug & Play model id.
     fn pnp_model_id(self: Box<Self>, model_id: &'static str) -> Box<dyn IotHubBuilder>;
+
+    /// Call this function to set the restart policy used for connecting to iot-hub.
+    fn retry_policy(
+        self: Box<Self>,
+        policy: RetryPolicy,
+        timeout_secs: u32,
+    ) -> Box<dyn IotHubBuilder>;
 }
 
 static AZURE_SDK_LOGGING: &str = "AZURE_SDK_LOGGING";
@@ -143,6 +150,25 @@ macro_rules! days_to_secs {
     ($num_days:expr) => {
         $num_days * 24 * 60 * 60
     };
+}
+
+/// [Restart policy](https://github.com/Azure/azure-iot-sdk-c/blob/main/doc/connection_and_messaging_reliability.md#connection-retry-policies) used to connect to iot-hib
+#[derive(Copy, Clone, Debug)]
+pub enum RetryPolicy {
+    /// check [here](https://github.com/Azure/azure-iot-sdk-c/blob/main/doc/connection_and_messaging_reliability.md#connection-retry-policies) for meaning
+    None = 0,
+    /// check [here](https://github.com/Azure/azure-iot-sdk-c/blob/main/doc/connection_and_messaging_reliability.md#connection-retry-policies) for meaning
+    Immediate = 1,
+    /// check [here](https://github.com/Azure/azure-iot-sdk-c/blob/main/doc/connection_and_messaging_reliability.md#connection-retry-policies) for meaning
+    Interval = 2,
+    /// check [here](https://github.com/Azure/azure-iot-sdk-c/blob/main/doc/connection_and_messaging_reliability.md#connection-retry-policies) for meaning
+    LinearBackoff = 3,
+    /// check [here](https://github.com/Azure/azure-iot-sdk-c/blob/main/doc/connection_and_messaging_reliability.md#connection-retry-policies) for meaning
+    ExponentialBackoff = 4,
+    /// check [here](https://github.com/Azure/azure-iot-sdk-c/blob/main/doc/connection_and_messaging_reliability.md#connection-retry-policies) for meaning
+    ExponentialBackoffWithJitter = 5,
+    /// check [here](https://github.com/Azure/azure-iot-sdk-c/blob/main/doc/connection_and_messaging_reliability.md#connection-retry-policies) for meaning
+    Random = 6,
 }
 
 /// Indicates [type](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-devguide-module-twins#back-end-operations) of desired properties update
@@ -223,6 +249,12 @@ impl IncomingMessageObserver {
     }
 }
 
+#[derive(Clone, Debug)]
+struct RetrySetting {
+    policy: RetryPolicy,
+    timeout_secs: u32,
+}
+
 /// Builder used to create an instance of [`IotHubClient`]
 /// ```no_run
 /// use azure_iot_sdk::client::*;
@@ -277,6 +309,7 @@ pub struct IotHubClientBuilder {
     tx_direct_method: Option<DirectMethodSender>,
     tx_incoming_message: Option<IncomingMessageObserver>,
     model_id: Option<&'static str>,
+    retry_setting: Option<RetrySetting>,
 }
 
 #[async_trait(?Send)]
@@ -332,7 +365,7 @@ impl IotHubBuilder for IotHubClientBuilder {
             "edge client type requires edge_client feature"
         );
 
-        IotHubClient::from_edge_environment(&self)
+        IotHubClient::from_edge_environment(self)
     }
 
     #[cfg(feature = "device_client")]
@@ -440,7 +473,7 @@ impl IotHubBuilder for IotHubClientBuilder {
             "module client type requires module_client feature"
         );
 
-        IotHubClient::from_connection_string(connection_string, &self)
+        IotHubClient::from_connection_string(connection_string, self)
     }
 
     #[cfg(feature = "module_client")]
@@ -496,7 +529,7 @@ impl IotHubBuilder for IotHubClientBuilder {
             "module client type requires module_client feature"
         );
 
-        IotHubClient::from_identity_service(&self).await
+        IotHubClient::from_identity_service(self).await
     }
 
     /// Add connection state observer
@@ -686,6 +719,43 @@ impl IotHubBuilder for IotHubClientBuilder {
         self.model_id = Some(model_id);
         self
     }
+
+    /// Call this function to set the restart policy used for connecting to iot-hub.
+    /// ```no_run
+    /// use azure_iot_sdk::client::*;
+    /// use std::{thread, time};
+    /// use tokio::{select, sync::mpsc};
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     #[cfg(feature = "edge_client")]
+    ///     let mut client = IotHubClient::builder()
+    ///         .retry_policy(RetryPolicy::None, 0)
+    ///         .build_edge_client()
+    ///         .unwrap();
+    ///     #[cfg(feature = "device_client")]
+    ///     let mut client = IotHubClient::builder()
+    ///         .retry_policy(RetryPolicy::None, 0)
+    ///         .build_device_client("my-connection-string")
+    ///         .unwrap();
+    ///     #[cfg(feature = "module_client")]
+    ///     let mut client = IotHubClient::builder()
+    ///         .retry_policy(RetryPolicy::None, 0)
+    ///         .build_module_client("my-connection-string")
+    ///         .unwrap();
+    /// }
+    /// ```
+    fn retry_policy(
+        mut self: Box<Self>,
+        policy: RetryPolicy,
+        timeout_secs: u32,
+    ) -> Box<dyn IotHubBuilder> {
+        self.retry_setting = Some(RetrySetting {
+            policy,
+            timeout_secs,
+        });
+        self
+    }
 }
 
 /// iothub client to be instantiated in order to initiate iothub communication
@@ -742,6 +812,7 @@ pub struct IotHubClient {
     tx_direct_method: Option<DirectMethodSender>,
     tx_incoming_message: Option<IncomingMessageObserver>,
     model_id: Option<&'static str>,
+    retry_setting: Option<RetrySetting>,
     confirmation_set: JoinSet<()>,
 }
 
@@ -776,7 +847,7 @@ impl IotHub for IotHubClient {
     }
 
     fn builder() -> Box<dyn IotHubBuilder> {
-        Box::new(IotHubClientBuilder::default())
+        Box::<IotHubClientBuilder>::default()
     }
 
     /// Call this function to send a message (D2C) to iothub.
@@ -963,6 +1034,7 @@ impl IotHubClient {
                 tx_direct_method: params.tx_direct_method.clone(),
                 tx_incoming_message: params.tx_incoming_message.clone(),
                 model_id: params.model_id,
+                retry_setting: params.retry_setting.clone(),
                 confirmation_set: JoinSet::new(),
             });
 
@@ -1022,6 +1094,7 @@ impl IotHubClient {
             tx_direct_method: params.tx_direct_method.clone(),
             tx_incoming_message: params.tx_incoming_message.clone(),
             model_id: params.model_id,
+            retry_setting: params.retry_setting.clone(),
             confirmation_set: JoinSet::new(),
         });
 
@@ -1111,6 +1184,14 @@ impl IotHubClient {
             self.twin.set_option(
                 CString::new("model_id")?,
                 model_id.as_ptr() as *const c_void,
+            )?;
+        }
+
+        if let Some(retry_setting) = &self.retry_setting {
+            info!("set retry policy: {retry_setting:?}");
+            self.twin.set_retry_policy(
+                retry_setting.policy as u32,
+                retry_setting.timeout_secs as usize,
             )?;
         }
 

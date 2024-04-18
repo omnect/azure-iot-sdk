@@ -92,6 +92,12 @@ pub trait Twin {
     ) -> Result<()>;
 
     fn set_option(&self, option_name: CString, value: *const std::ffi::c_void) -> Result<()>;
+
+    fn set_retry_policy(
+        &self,
+        policy: IOTHUB_CLIENT_RETRY_POLICY,
+        timeout_secs: usize,
+    ) -> Result<()>;
 }
 
 #[cfg(feature = "edge_client")]
@@ -301,6 +307,26 @@ impl Twin for ModuleTwin {
             Ok(())
         }
     }
+
+    fn set_retry_policy(
+        &self,
+        policy: IOTHUB_CLIENT_RETRY_POLICY,
+        timeout_secs: usize,
+    ) -> Result<()> {
+        unsafe {
+            if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
+                != IoTHubClient_SetRetryPolicy(
+                    self.handle.expect("no handle"),
+                    policy,
+                    timeout_secs,
+                )
+            {
+                anyhow::bail!("error while calling IoTHubClient_SetRetryPolicy()");
+            }
+
+            Ok(())
+        }
+    }
 }
 
 #[cfg(feature = "device_client")]
@@ -485,6 +511,26 @@ impl Twin for DeviceTwin {
                 )
             {
                 anyhow::bail!("error while calling IoTHubDeviceClient_SetOption()");
+            }
+
+            Ok(())
+        }
+    }
+
+    fn set_retry_policy(
+        &self,
+        policy: IOTHUB_CLIENT_RETRY_POLICY,
+        timeout_secs: usize,
+    ) -> Result<()> {
+        unsafe {
+            if IOTHUB_CLIENT_RESULT_TAG_IOTHUB_CLIENT_OK
+                != IoTHubDeviceClient_SetRetryPolicy(
+                    self.handle.expect("no handle"),
+                    policy,
+                    timeout_secs,
+                )
+            {
+                anyhow::bail!("error while calling IoTHubDeviceClient_SetRetryPolicy()");
             }
 
             Ok(())
