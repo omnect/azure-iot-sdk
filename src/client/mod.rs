@@ -101,6 +101,9 @@ pub struct TwinUpdate {
     pub value: serde_json::Value,
 }
 
+/// Sender used to signal a new [`TwinUpdate`]
+pub type TwinObserver = mpsc::Sender<TwinUpdate>;
+
 /// Reason for unauthenticated connection result
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum UnauthenticatedReason {
@@ -127,6 +130,9 @@ pub enum AuthenticationStatus {
     Unauthenticated(UnauthenticatedReason),
 }
 
+/// Sender used to signal a new [`AuthenticationStatus`]
+pub type AuthenticationObserver = mpsc::Sender<AuthenticationStatus>;
+
 /// DirectMethod
 pub struct DirectMethod {
     /// method name
@@ -139,7 +145,7 @@ pub struct DirectMethod {
 /// Result used by iothub client consumer to send the result of a direct method
 pub type DirectMethodResponder = oneshot::Sender<Result<Option<serde_json::Value>>>;
 /// Sender used to signal a direct method to the iothub client consumer
-pub type DirectMethodSender = mpsc::Sender<DirectMethod>;
+pub type DirectMethodObserver = mpsc::Sender<DirectMethod>;
 
 /// IncomingIotMessage
 pub struct IncomingIotMessage {
@@ -225,9 +231,9 @@ struct RetrySetting {
 /// ```
 #[derive(Debug, Default)]
 pub struct IotHubClientBuilder {
-    tx_connection_status: Option<Box<mpsc::Sender<AuthenticationStatus>>>,
-    tx_twin_desired: Option<Box<mpsc::Sender<TwinUpdate>>>,
-    tx_direct_method: Option<Box<DirectMethodSender>>,
+    tx_connection_status: Option<Box<AuthenticationObserver>>,
+    tx_twin_desired: Option<Box<TwinObserver>>,
+    tx_direct_method: Option<Box<DirectMethodObserver>>,
     tx_incoming_message: Option<Box<IncomingMessageObserver>>,
     model_id: Option<&'static str>,
     retry_setting: Option<RetrySetting>,
@@ -461,7 +467,7 @@ impl IotHubClientBuilder {
     /// ```
     pub fn observe_connection_state(
         mut self,
-        tx_connection_status: mpsc::Sender<AuthenticationStatus>,
+        tx_connection_status: AuthenticationObserver,
     ) -> Self {
         self.tx_connection_status = Some(Box::new(tx_connection_status));
         self
@@ -494,7 +500,7 @@ impl IotHubClientBuilder {
     ///     }
     /// }
     /// ```
-    pub fn observe_desired_properties(mut self, tx_twin_desired: mpsc::Sender<TwinUpdate>) -> Self {
+    pub fn observe_desired_properties(mut self, tx_twin_desired: TwinObserver) -> Self {
         self.tx_twin_desired = Some(Box::new(tx_twin_desired));
         self
     }
@@ -535,7 +541,7 @@ impl IotHubClientBuilder {
     ///     }
     /// }
     /// ```
-    pub fn observe_direct_methods(mut self, tx_direct_method: DirectMethodSender) -> Self {
+    pub fn observe_direct_methods(mut self, tx_direct_method: DirectMethodObserver) -> Self {
         self.tx_direct_method = Some(Box::new(tx_direct_method));
         self
     }
@@ -697,9 +703,9 @@ impl IotHubClientBuilder {
 /// ```
 pub struct IotHubClient {
     twin: Box<dyn Twin>,
-    tx_connection_status: Option<Box<mpsc::Sender<AuthenticationStatus>>>,
-    tx_twin_desired: Option<Box<mpsc::Sender<TwinUpdate>>>,
-    tx_direct_method: Option<Box<DirectMethodSender>>,
+    tx_connection_status: Option<Box<AuthenticationObserver>>,
+    tx_twin_desired: Option<Box<TwinObserver>>,
+    tx_direct_method: Option<Box<DirectMethodObserver>>,
     tx_incoming_message: Option<Box<IncomingMessageObserver>>,
     model_id: Option<&'static str>,
     retry_setting: Option<RetrySetting>,
@@ -1016,7 +1022,7 @@ impl IotHubClient {
         if let Some(tx) = self.tx_connection_status.as_deref_mut() {
             self.twin.set_connection_status_callback(
                 Some(IotHubClient::c_connection_status_callback),
-                tx as *mut mpsc::Sender<AuthenticationStatus> as *mut c_void,
+                tx as *mut AuthenticationObserver as *mut c_void,
             )?;
         }
 
@@ -1030,14 +1036,14 @@ impl IotHubClient {
         if let Some(tx) = self.tx_twin_desired.as_deref_mut() {
             self.twin.set_twin_callback(
                 Some(IotHubClient::c_twin_callback),
-                tx as *mut mpsc::Sender<TwinUpdate> as *mut c_void,
+                tx as *mut TwinObserver as *mut c_void,
             )?;
         }
 
         if let Some(tx) = self.tx_direct_method.as_deref_mut() {
             self.twin.set_method_callback(
                 Some(IotHubClient::c_direct_method_callback),
-                tx as *mut DirectMethodSender as *mut c_void,
+                tx as *mut DirectMethodObserver as *mut c_void,
             )?;
         }
 
@@ -1099,7 +1105,7 @@ impl IotHubClient {
         status_reason: IOTHUB_CLIENT_CONNECTION_STATUS_REASON,
         context: *mut ::std::os::raw::c_void,
     ) {
-        let tx = &mut *(context as *mut mpsc::Sender<AuthenticationStatus>);
+        let tx = &mut *(context as *mut AuthenticationObserver);
 
         let status = match connection_status {
             IOTHUB_CLIENT_CONNECTION_STATUS_TAG_IOTHUB_CLIENT_CONNECTION_AUTHENTICATED => {
@@ -1216,7 +1222,7 @@ impl IotHubClient {
         size: usize,
         context: *mut ::std::os::raw::c_void,
     ) {
-        let tx = &mut *(context as *mut mpsc::Sender<TwinUpdate>);
+        let tx = &mut *(context as *mut TwinObserver);
 
         match String::from_utf8(slice::from_raw_parts(payload, size).to_vec()) {
             Ok(desired_string) => {
@@ -1267,7 +1273,7 @@ impl IotHubClient {
         const METHOD_RESPONSE_SUCCESS: i32 = 200;
         const METHOD_RESPONSE_ERROR: i32 = 401;
 
-        let tx_direct_method = &mut *(context as *mut DirectMethodSender);
+        let tx_direct_method = &mut *(context as *mut DirectMethodObserver);
 
         let empty_result: CString = CString::from_vec_unchecked(b"{ }".to_vec());
         *response_size = empty_result.as_bytes().len();
