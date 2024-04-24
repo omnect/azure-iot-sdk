@@ -93,6 +93,17 @@ pub enum TwinUpdateState {
     Partial = 1,
 }
 
+/// Used to update [desired properties](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-devguide-module-twins#back-end-operations) to the client
+pub struct TwinUpdate {
+    /// type of update [`TwinUpdateState`]
+    pub state: TwinUpdateState,
+    /// value
+    pub value: serde_json::Value,
+}
+
+/// Sender used to signal a new [`TwinUpdate`]
+pub type TwinObserver = mpsc::Sender<TwinUpdate>;
+
 /// Reason for unauthenticated connection result
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum UnauthenticatedReason {
@@ -119,6 +130,9 @@ pub enum AuthenticationStatus {
     Unauthenticated(UnauthenticatedReason),
 }
 
+/// Sender used to signal a new [`AuthenticationStatus`]
+pub type AuthenticationObserver = mpsc::Sender<AuthenticationStatus>;
+
 /// DirectMethod
 pub struct DirectMethod {
     /// method name
@@ -131,7 +145,7 @@ pub struct DirectMethod {
 /// Result used by iothub client consumer to send the result of a direct method
 pub type DirectMethodResponder = oneshot::Sender<Result<Option<serde_json::Value>>>;
 /// Sender used to signal a direct method to the iothub client consumer
-pub type DirectMethodSender = mpsc::Sender<DirectMethod>;
+pub type DirectMethodObserver = mpsc::Sender<DirectMethod>;
 
 /// IncomingIotMessage
 pub struct IncomingIotMessage {
@@ -148,15 +162,15 @@ pub type IotMessageSender = mpsc::Sender<IncomingIotMessage>;
 /// Provides a channel and a property array to receive incoming cloud to device messages
 #[derive(Clone, Debug)]
 pub struct IncomingMessageObserver {
-    observer: IotMessageSender,
+    responder: IotMessageSender,
     properties: Vec<String>,
 }
 
 impl IncomingMessageObserver {
     /// Creates a new instance of [`IncomingMessageObserver`]
-    pub fn new(observer: IotMessageSender, properties: Vec<String>) -> Self {
+    pub fn new(responder: IotMessageSender, properties: Vec<String>) -> Self {
         IncomingMessageObserver {
-            observer,
+            responder,
             properties,
         }
     }
@@ -217,10 +231,10 @@ struct RetrySetting {
 /// ```
 #[derive(Debug, Default)]
 pub struct IotHubClientBuilder {
-    tx_connection_status: Option<mpsc::Sender<AuthenticationStatus>>,
-    tx_twin_desired: Option<mpsc::Sender<(TwinUpdateState, serde_json::Value)>>,
-    tx_direct_method: Option<DirectMethodSender>,
-    tx_incoming_message: Option<IncomingMessageObserver>,
+    tx_connection_status: Option<Box<AuthenticationObserver>>,
+    tx_twin_desired: Option<Box<TwinObserver>>,
+    tx_direct_method: Option<Box<DirectMethodObserver>>,
+    tx_incoming_message: Option<Box<IncomingMessageObserver>>,
     model_id: Option<&'static str>,
     retry_setting: Option<RetrySetting>,
 }
@@ -453,9 +467,9 @@ impl IotHubClientBuilder {
     /// ```
     pub fn observe_connection_state(
         mut self,
-        tx_connection_status: mpsc::Sender<AuthenticationStatus>,
+        tx_connection_status: AuthenticationObserver,
     ) -> Self {
-        self.tx_connection_status = Some(tx_connection_status);
+        self.tx_connection_status = Some(Box::new(tx_connection_status));
         self
     }
 
@@ -486,11 +500,8 @@ impl IotHubClientBuilder {
     ///     }
     /// }
     /// ```
-    pub fn observe_desired_properties(
-        mut self,
-        tx_twin_desired: mpsc::Sender<(TwinUpdateState, serde_json::Value)>,
-    ) -> Self {
-        self.tx_twin_desired = Some(tx_twin_desired);
+    pub fn observe_desired_properties(mut self, tx_twin_desired: TwinObserver) -> Self {
+        self.tx_twin_desired = Some(Box::new(tx_twin_desired));
         self
     }
 
@@ -530,8 +541,8 @@ impl IotHubClientBuilder {
     ///     }
     /// }
     /// ```
-    pub fn observe_direct_methods(mut self, tx_direct_method: DirectMethodSender) -> Self {
-        self.tx_direct_method = Some(tx_direct_method);
+    pub fn observe_direct_methods(mut self, tx_direct_method: DirectMethodObserver) -> Self {
+        self.tx_direct_method = Some(Box::new(tx_direct_method));
         self
     }
 
@@ -575,7 +586,7 @@ impl IotHubClientBuilder {
         mut self,
         tx_incoming_message: IncomingMessageObserver,
     ) -> Self {
-        self.tx_incoming_message = Some(tx_incoming_message);
+        self.tx_incoming_message = Some(Box::new(tx_incoming_message));
         self
     }
 
@@ -692,10 +703,10 @@ impl IotHubClientBuilder {
 /// ```
 pub struct IotHubClient {
     twin: Box<dyn Twin>,
-    tx_connection_status: Option<mpsc::Sender<AuthenticationStatus>>,
-    tx_twin_desired: Option<mpsc::Sender<(TwinUpdateState, serde_json::Value)>>,
-    tx_direct_method: Option<DirectMethodSender>,
-    tx_incoming_message: Option<IncomingMessageObserver>,
+    tx_connection_status: Option<Box<AuthenticationObserver>>,
+    tx_twin_desired: Option<Box<TwinObserver>>,
+    tx_direct_method: Option<Box<DirectMethodObserver>>,
+    tx_incoming_message: Option<Box<IncomingMessageObserver>>,
     model_id: Option<&'static str>,
     retry_setting: Option<RetrySetting>,
     confirmation_set: JoinSet<()>,
@@ -1008,27 +1019,32 @@ impl IotHubClient {
     }
 
     fn set_callbacks(&mut self) -> Result<()> {
-        let context = self as *mut IotHubClient as *mut c_void;
-
-        if self.tx_connection_status.is_some() {
+        if let Some(tx) = self.tx_connection_status.as_deref_mut() {
             self.twin.set_connection_status_callback(
                 Some(IotHubClient::c_connection_status_callback),
-                context,
+                tx as *mut AuthenticationObserver as *mut c_void,
             )?;
         }
 
-        if self.tx_incoming_message.is_some() {
-            self.twin
-                .set_input_message_callback(Some(IotHubClient::c_c2d_message_callback), context)?;
+        if let Some(tx) = self.tx_incoming_message.as_deref_mut() {
+            self.twin.set_input_message_callback(
+                Some(IotHubClient::c_c2d_message_callback),
+                tx as *mut IncomingMessageObserver as *mut c_void,
+            )?;
         }
 
-        if self.tx_twin_desired.is_some() {
-            self.twin
-                .set_twin_callback(Some(IotHubClient::c_twin_callback), context)?;
+        if let Some(tx) = self.tx_twin_desired.as_deref_mut() {
+            self.twin.set_twin_callback(
+                Some(IotHubClient::c_twin_callback),
+                tx as *mut TwinObserver as *mut c_void,
+            )?;
         }
-        if self.tx_direct_method.is_some() {
-            self.twin
-                .set_method_callback(Some(IotHubClient::c_direct_method_callback), context)?;
+
+        if let Some(tx) = self.tx_direct_method.as_deref_mut() {
+            self.twin.set_method_callback(
+                Some(IotHubClient::c_direct_method_callback),
+                tx as *mut DirectMethodObserver as *mut c_void,
+            )?;
         }
 
         Ok(())
@@ -1089,7 +1105,7 @@ impl IotHubClient {
         status_reason: IOTHUB_CLIENT_CONNECTION_STATUS_REASON,
         context: *mut ::std::os::raw::c_void,
     ) {
-        let client = &mut *(context as *mut IotHubClient);
+        let tx = &mut *(context as *mut AuthenticationObserver);
 
         let status = match connection_status {
             IOTHUB_CLIENT_CONNECTION_STATUS_TAG_IOTHUB_CLIENT_CONNECTION_AUTHENTICATED => {
@@ -1133,81 +1149,70 @@ impl IotHubClient {
 
         debug!("Received connection status: {status:?}");
 
-        if let Some(tx) = &client.tx_connection_status {
-            tx.blocking_send(status)
-                .expect("c_connection_status_callback: cannot blocking_send");
-        }
+        tx.blocking_send(status)
+            .expect("c_connection_status_callback: cannot blocking_send");
     }
 
     unsafe extern "C" fn c_c2d_message_callback(
         handle: *mut IOTHUB_MESSAGE_HANDLE_DATA_TAG,
         context: *mut ::std::os::raw::c_void,
     ) -> IOTHUBMESSAGE_DISPOSITION_RESULT {
-        let client = &mut *(context as *mut IotHubClient);
+        let observer = &mut *(context as *mut IncomingMessageObserver);
+        let mut property_keys: Vec<CString> = vec![];
 
-        if let Some(observer) = &client.tx_incoming_message {
-            let mut property_keys: Vec<CString> = vec![];
-            for property in &observer.properties {
-                match CString::new(property.clone()) {
-                    Ok(p) => property_keys.push(p),
-                    Err(e) => {
-                        error!(
-                            "invalid property in c2d message received. payload: {property}, error: {e}"
-                        );
-                        return IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_REJECTED;
-                    }
-                }
-            }
-
-            match IotMessage::from_incoming_handle(handle, property_keys) {
-                Ok(msg) => {
-                    debug!("Received message from iothub: {msg:?}");
-
-                    let (tx_result, rx_result) = oneshot::channel::<Result<DispositionResult>>();
-
-                    observer
-                        .observer
-                        .blocking_send(IncomingIotMessage {
-                            inner: msg,
-                            responder: tx_result,
-                        })
-                        .expect("c_c2d_message_callback: cannot blocking_send");
-
-                    match rx_result.blocking_recv() {
-                        Ok(Ok(DispositionResult::Accepted)) => {
-                            IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_ACCEPTED
-                        }
-                        Ok(Ok(DispositionResult::Rejected)) => {
-                            IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_REJECTED
-                        }
-                        Ok(Ok(DispositionResult::Abandoned)) => {
-                            IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_ABANDONED
-                        }
-                        Ok(Ok(DispositionResult::AsyncAck)) => {
-                            IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_ASYNC_ACK
-                        }
-                        Ok(Err(e)) => {
-                            error!("cannot handle c2d message: {e}");
-                            IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_REJECTED
-                        }
-                        Err(e) => {
-                            error!("channel unexpectedly closed: {e}");
-                            IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_REJECTED
-                        }
-                    }
-                }
+        for property in &observer.properties {
+            match CString::new(property.clone()) {
+                Ok(p) => property_keys.push(p),
                 Err(e) => {
-                    error!("cannot create IotMessage from incomming handle: {e}");
-                    IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_REJECTED
+                    error!(
+                        "invalid property in c2d message received. payload: {property}, error: {e}"
+                    );
+                    return IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_REJECTED;
                 }
             }
-        } else {
-            match IotMessage::from_incoming_handle(handle, vec![]) {
-                Ok(msg) => debug!("Received message from iothub: {msg:?}"),
-                Err(e) => error!("cannot create IotMessage from incomming handle: {e}"),
-            }
+        }
 
-            IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_REJECTED
+        match IotMessage::from_incoming_handle(handle, property_keys) {
+            Ok(msg) => {
+                debug!("Received message from iothub: {msg:?}");
+
+                let (tx_result, rx_result) = oneshot::channel::<Result<DispositionResult>>();
+
+                observer
+                    .responder
+                    .blocking_send(IncomingIotMessage {
+                        inner: msg,
+                        responder: tx_result,
+                    })
+                    .expect("c_c2d_message_callback: cannot blocking_send");
+
+                match rx_result.blocking_recv() {
+                    Ok(Ok(DispositionResult::Accepted)) => {
+                        IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_ACCEPTED
+                    }
+                    Ok(Ok(DispositionResult::Rejected)) => {
+                        IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_REJECTED
+                    }
+                    Ok(Ok(DispositionResult::Abandoned)) => {
+                        IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_ABANDONED
+                    }
+                    Ok(Ok(DispositionResult::AsyncAck)) => {
+                        IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_ASYNC_ACK
+                    }
+                    Ok(Err(e)) => {
+                        error!("cannot handle c2d message: {e}");
+                        IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_REJECTED
+                    }
+                    Err(e) => {
+                        error!("channel unexpectedly closed: {e}");
+                        IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_REJECTED
+                    }
+                }
+            }
+            Err(e) => {
+                error!("cannot create IotMessage from incomming handle: {e}");
+                IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_REJECTED
+            }
         }
     }
 
@@ -1217,21 +1222,23 @@ impl IotHubClient {
         size: usize,
         context: *mut ::std::os::raw::c_void,
     ) {
+        let tx = &mut *(context as *mut TwinObserver);
+
         match String::from_utf8(slice::from_raw_parts(payload, size).to_vec()) {
             Ok(desired_string) => {
                 match serde_json::from_str::<serde_json::Value>(&desired_string) {
                     Ok(desired_json) => {
-                        let client = &mut *(context as *mut IotHubClient);
                         let desired_state: TwinUpdateState = mem::transmute(state as i8);
 
                         debug!(
                             "Twin callback. state: {desired_state:?} size: {size} payload: {desired_json}"
                         );
 
-                        if let Some(tx) = &client.tx_twin_desired {
-                            tx.blocking_send((desired_state, desired_json))
-                                .expect("c_twin_callback: cannot blocking_send");
-                        }
+                        tx.blocking_send(TwinUpdate {
+                            state: desired_state,
+                            value: desired_json,
+                        })
+                        .expect("c_twin_callback: cannot blocking_send");
                     }
                     Err(e) => error!(
                         "desired twin cannot be parsed. payload: {desired_string} error: {e}"
@@ -1248,8 +1255,7 @@ impl IotHubClient {
     ) {
         trace!("SendReportedTwin result: {status_code}");
 
-        let result: Box<oneshot::Sender<bool>> =
-            Box::from_raw(context as *mut oneshot::Sender<bool>);
+        let result = Box::from_raw(context as *mut oneshot::Sender<bool>);
 
         result
             .send(status_code == 204)
@@ -1266,6 +1272,8 @@ impl IotHubClient {
     ) -> ::std::os::raw::c_int {
         const METHOD_RESPONSE_SUCCESS: i32 = 200;
         const METHOD_RESPONSE_ERROR: i32 = 401;
+
+        let tx_direct_method = &mut *(context as *mut DirectMethodObserver);
 
         let empty_result: CString = CString::from_vec_unchecked(b"{ }".to_vec());
         *response_size = empty_result.as_bytes().len();
@@ -1296,54 +1304,50 @@ impl IotHubClient {
 
         debug!("Received direct method call: {method_name:?} with payload: {payload}");
 
-        let client = &mut *(context as *mut IotHubClient);
+        let (tx_result, rx_result) = oneshot::channel::<Result<Option<serde_json::Value>>>();
 
-        if let Some(tx_direct_method) = &client.tx_direct_method {
-            let (tx_result, rx_result) = oneshot::channel::<Result<Option<serde_json::Value>>>();
+        tx_direct_method
+            .blocking_send(DirectMethod {
+                name: method_name.to_string(),
+                payload,
+                responder: tx_result,
+            })
+            .expect("c_direct_method_callback: cannot blocking_send");
 
-            tx_direct_method
-                .blocking_send(DirectMethod {
-                    name: method_name.to_string(),
-                    payload,
-                    responder: tx_result,
-                })
-                .expect("c_direct_method_callback: cannot blocking_send");
+        match rx_result.blocking_recv() {
+            Ok(Ok(None)) => {
+                debug!("direct method has no result");
+                return METHOD_RESPONSE_SUCCESS;
+            }
+            Ok(Ok(Some(result))) => {
+                debug!("direct method result: {result:?}");
 
-            match rx_result.blocking_recv() {
-                Ok(Ok(None)) => {
-                    debug!("direct method has no result");
-                    return METHOD_RESPONSE_SUCCESS;
-                }
-                Ok(Ok(Some(result))) => {
-                    debug!("direct method result: {result:?}");
-
-                    match CString::new(result.to_string()) {
-                        Ok(r) => {
-                            *response_size = r.as_bytes().len();
-                            *response = r.into_raw() as *mut u8;
-                            return METHOD_RESPONSE_SUCCESS;
-                        }
-                        Err(e) => {
-                            error!("cannot parse direct method result: {e}");
-                        }
+                match CString::new(result.to_string()) {
+                    Ok(r) => {
+                        *response_size = r.as_bytes().len();
+                        *response = r.into_raw() as *mut u8;
+                        return METHOD_RESPONSE_SUCCESS;
+                    }
+                    Err(e) => {
+                        error!("cannot parse direct method result: {e}");
                     }
                 }
-                Ok(Err(e)) => {
-                    error!("direct method error: {e:?}");
+            }
+            Ok(Err(e)) => {
+                error!("direct method error: {e:?}");
 
-                    match CString::new(json!(e.to_string()).to_string()) {
-                        Ok(r) => {
-                            *response_size = r.as_bytes().len();
-                            *response = r.into_raw() as *mut u8;
-                        }
-                        Err(e) => {
-                            error!("cannot parse direct method result: {e}");
-                        }
+                match CString::new(json!(e.to_string()).to_string()) {
+                    Ok(r) => {
+                        *response_size = r.as_bytes().len();
+                        *response = r.into_raw() as *mut u8;
+                    }
+                    Err(e) => {
+                        error!("cannot parse direct method result: {e}");
                     }
                 }
-                Err(e) => {
-                    error!("channel unexpectedly closed: {e}");
-                }
+            }
+            Err(e) => {
+                error!("channel unexpectedly closed: {e}");
             }
         }
 
@@ -1354,8 +1358,7 @@ impl IotHubClient {
         status: IOTHUB_CLIENT_CONFIRMATION_RESULT,
         context: *mut std::ffi::c_void,
     ) {
-        let result: Box<oneshot::Sender<bool>> =
-            Box::from_raw(context as *mut oneshot::Sender<bool>);
+        let result = Box::from_raw(context as *mut oneshot::Sender<bool>);
         let mut succeeded = false;
 
         match status {
