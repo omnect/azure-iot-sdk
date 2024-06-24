@@ -920,6 +920,9 @@ impl IotHubClient {
                - we have a clean shutdown
                - we shutdown as fast as possible
                - we DON'T WAIT for pending confirmations
+
+            Further the following line of code creates a false positive clippy warning which we
+            allow on function scope.
         */
 
         self.confirmation_set.borrow_mut().shutdown().await;
