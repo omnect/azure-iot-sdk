@@ -909,6 +909,7 @@ impl IotHubClient {
     ///     client.shutdown();
     /// }
     /// ```
+    #[allow(clippy::await_holding_refcell_ref)]
     pub async fn shutdown(&self) {
         info!("shutdown");
 
@@ -997,7 +998,7 @@ impl IotHubClient {
             tx_incoming_message: params.tx_incoming_message.clone(),
             model_id: params.model_id,
             retry_setting: params.retry_setting.clone(),
-            confirmation_set: RefCell::new(JoinSet::new()),
+            confirmation_set: JoinSet::new().into(),
         };
 
         client.set_callbacks()?;
