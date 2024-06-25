@@ -41,6 +41,7 @@ pub(crate) fn sdk_version_string() -> String {
 }
 
 pub trait Twin {
+    #[cfg(any(feature = "device_client", feature = "module_client"))]
     fn create_from_connection_string(&mut self, connection_string: CString) -> Result<()>;
 
     fn destroy(&mut self);
@@ -119,6 +120,7 @@ impl ModuleTwin {
 
 #[cfg(any(feature = "module_client", feature = "edge_client"))]
 impl Twin for ModuleTwin {
+    #[cfg(feature = "module_client")]
     fn create_from_connection_string(&mut self, connection_string: CString) -> Result<()> {
         unsafe {
             let handle = IoTHubModuleClient_CreateFromConnectionString(
