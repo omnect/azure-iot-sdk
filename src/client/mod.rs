@@ -30,6 +30,7 @@ use eis_utils::*;
 use futures::task;
 use log::{debug, error, info, trace, warn};
 use serde_json::json;
+use std::cell::RefCell;
 #[cfg(feature = "module_client")]
 use std::time::SystemTime;
 use std::{
@@ -709,7 +710,7 @@ pub struct IotHubClient {
     tx_incoming_message: Option<Box<IncomingMessageObserver>>,
     model_id: Option<&'static str>,
     retry_setting: Option<RetrySetting>,
-    confirmation_set: JoinSet<()>,
+    confirmation_set: RefCell<JoinSet<()>>,
 }
 
 impl IotHubClient {
@@ -789,7 +790,7 @@ impl IotHubClient {
     ///     client.send_d2c_message(msg);
     /// }
     /// ```
-    pub fn send_d2c_message(&mut self, mut message: IotMessage) -> Result<()> {
+    pub fn send_d2c_message(&self, mut message: IotMessage) -> Result<()> {
         let handle = message.create_outgoing_handle()?;
         let queue = message.output_queue.clone();
         let (tx, rx) = oneshot::channel::<bool>();
@@ -832,7 +833,7 @@ impl IotHubClient {
     ///     client.twin_report(reported);
     /// }
     /// ```
-    pub fn twin_report(&mut self, reported: serde_json::Value) -> Result<()> {
+    pub fn twin_report(&self, reported: serde_json::Value) -> Result<()> {
         debug!("send reported: {reported:?}");
 
         let reported_state = CString::new(reported.to_string())?;
@@ -871,10 +872,14 @@ impl IotHubClient {
     pub fn twin_async(&mut self) -> Result<()> {
         debug!("twin_complete: get entire twin");
 
-        let context = self as *mut IotHubClient as *mut c_void;
+        let Some(tx) = self.tx_twin_desired.as_deref_mut() else {
+            anyhow::bail!("twin observer not presnt")
+        };
 
-        self.twin
-            .twin_async(Some(IotHubClient::c_twin_callback), context)
+        self.twin.twin_async(
+            Some(IotHubClient::c_twin_callback),
+            tx as *mut TwinObserver as *mut c_void,
+        )
     }
 
     /// Call this function to properly shutdown IotHub. All reported properties and D2C messages will be
@@ -904,7 +909,8 @@ impl IotHubClient {
     ///     client.shutdown();
     /// }
     /// ```
-    pub async fn shutdown(&mut self) {
+    #[allow(clippy::await_holding_refcell_ref)]
+    pub async fn shutdown(&self) {
         info!("shutdown");
 
         /*
@@ -914,9 +920,12 @@ impl IotHubClient {
                - we have a clean shutdown
                - we shutdown as fast as possible
                - we DON'T WAIT for pending confirmations
+
+            Further the following line of code creates a false positive clippy warning which we
+            allow on function scope.
         */
 
-        self.confirmation_set.shutdown().await;
+        self.confirmation_set.borrow_mut().shutdown().await;
     }
 
     #[cfg(feature = "edge_client")]
@@ -935,7 +944,7 @@ impl IotHubClient {
             tx_incoming_message: params.tx_incoming_message.clone(),
             model_id: params.model_id,
             retry_setting: params.retry_setting.clone(),
-            confirmation_set: JoinSet::new(),
+            confirmation_set: JoinSet::new().into(),
         };
 
         client.set_callbacks()?;
@@ -992,7 +1001,7 @@ impl IotHubClient {
             tx_incoming_message: params.tx_incoming_message.clone(),
             model_id: params.model_id,
             retry_setting: params.retry_setting.clone(),
-            confirmation_set: JoinSet::new(),
+            confirmation_set: JoinSet::new().into(),
         };
 
         client.set_callbacks()?;
@@ -1377,8 +1386,8 @@ impl IotHubClient {
             .expect("c_d2c_confirmation_callback: cannot send result");
     }
 
-    fn spawn_confirmation(&mut self, rx: oneshot::Receiver<bool>) {
-        let before = self.confirmation_set.len();
+    fn spawn_confirmation(&self, rx: oneshot::Receiver<bool>) {
+        let before = self.confirmation_set.borrow().len();
         let waker = task::noop_waker();
         let mut cx = Context::from_waker(&waker);
         let mut poll = Poll::Ready(Some(Ok::<_, JoinError>(())));
@@ -1386,19 +1395,19 @@ impl IotHubClient {
         // check if some confirmations run to completion meanwhile
         // we don't wait for completion here
         while let Poll::Ready(Some(Ok(()))) = poll {
-            poll = self.confirmation_set.poll_join_next(&mut cx);
+            poll = self.confirmation_set.borrow_mut().poll_join_next(&mut cx);
         }
 
         debug!(
             "cleaned {} confirmations",
-            before - self.confirmation_set.len()
+            before - self.confirmation_set.borrow().len()
         );
 
         // spawn a task to handle the following results:
         //   - succeeded
         //   - failed
         //   - timed out
-        self.confirmation_set.spawn(async move {
+        self.confirmation_set.borrow_mut().spawn(async move {
             match timeout(Duration::from_secs(Self::get_confirmation_timeout()), rx).await {
                 // if really needed we could pass around the json of property or D2C msg to get logged here as context
                 Ok(Ok(false)) => error!("confirmation failed"),
