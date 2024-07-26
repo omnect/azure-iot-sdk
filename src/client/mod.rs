@@ -57,7 +57,7 @@ static AZURE_SDK_DO_WORK_FREQUENCY_IN_MS: &str = "AZURE_SDK_DO_WORK_FREQUENCY_IN
 static DO_WORK_FREQUENCY_RANGE_IN_MS: std::ops::RangeInclusive<u64> = 0..=100;
 static DO_WORK_FREQUENCY_DEFAULT_IN_MS: u64 = 100;
 static AZURE_SDK_CONFIRMATION_TIMEOUT_IN_SECS: &str = "AZURE_SDK_CONFIRMATION_TIMEOUT_IN_SECS";
-static CONFIRMATION_TIMEOUT_DEFAULT_IN_SECS: u64 = 300;
+static CONFIRMATION_TIMEOUT_DEFAULT_IN_SECS: u64 = 15;
 
 #[cfg(feature = "module_client")]
 macro_rules! days_to_secs {
@@ -912,6 +912,33 @@ impl IotHubClient {
     #[allow(clippy::await_holding_refcell_ref)]
     pub async fn shutdown(&self) {
         info!("shutdown");
+
+        let join_all = async {
+            debug!(
+                "there are {} pending confirmations.",
+                self.confirmation_set.borrow().len()
+            );
+            while self
+                .confirmation_set
+                .borrow_mut()
+                .join_next()
+                .await
+                .is_some()
+            {}
+        };
+
+        if tokio::time::timeout(
+            Duration::from_secs(Self::get_confirmation_timeout()),
+            join_all,
+        )
+        .await
+        .is_err()
+        {
+            warn!(
+                "there are {} pending confirmations on shutdown.",
+                self.confirmation_set.borrow().len()
+            );
+        }
 
         /*
            We abort and join all "wait for pending confirmations" tasks
