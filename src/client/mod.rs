@@ -939,18 +939,6 @@ impl IotHubClient {
                 self.confirmation_set.borrow().len()
             );
         }
-        // spawn a task to handle the following results:
-        //   - succeeded
-        //   - failed
-        //   - timed out
-        self.confirmation_set.borrow_mut().spawn(async move {
-            match timeout(Duration::from_secs(Self::get_confirmation_timeout()), rx).await {
-                // if really needed we could pass around the json of property or D2C msg to get logged here as context
-                Ok(Ok(false)) => error!("confirmation failed"),
-                Err(_) => warn!("confirmation timed out"),
-                _ => debug!("confirmation successfully received"),
-            }
-        });
 
         /*
            We abort and join all "wait for pending confirmations" tasks
