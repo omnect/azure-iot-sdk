@@ -913,41 +913,32 @@ impl IotHubClient {
     pub async fn shutdown(&self) {
         info!("shutdown");
 
-        debug!(
-            "there are {} pending confirmations.",
-            self.confirmation_set.borrow().len()
-        );
+        let join_all = async {
+            debug!(
+                "there are {} pending confirmations.",
+                self.confirmation_set.borrow().len()
+            );
+            while self
+                .confirmation_set
+                .borrow_mut()
+                .join_next()
+                .await
+                .is_some()
+            {}
+        };
 
-        if let Err(_) = tokio::time::timeout(
+        if tokio::time::timeout(
             Duration::from_secs(Self::get_confirmation_timeout()),
-            tokio::spawn(async move {
-                while let Some(res) = self.confirmation_set.borrow().join_next().await {
-                    debug!(
-                        "there are {} pending confirmations.",
-                        self.confirmation_set.borrow().len()
-                    );
-                }
-            }),
+            join_all,
         )
         .await
+        .is_err()
         {
             warn!(
                 "there are {} pending confirmations on shutdown.",
                 self.confirmation_set.borrow().len()
             );
         }
-        // spawn a task to handle the following results:
-        //   - succeeded
-        //   - failed
-        //   - timed out
-        self.confirmation_set.borrow_mut().spawn(async move {
-            match timeout(Duration::from_secs(Self::get_confirmation_timeout()), rx).await {
-                // if really needed we could pass around the json of property or D2C msg to get logged here as context
-                Ok(Ok(false)) => error!("confirmation failed"),
-                Err(_) => warn!("confirmation timed out"),
-                _ => debug!("confirmation successfully received"),
-            }
-        });
 
         /*
            We abort and join all "wait for pending confirmations" tasks
