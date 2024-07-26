@@ -57,7 +57,7 @@ static AZURE_SDK_DO_WORK_FREQUENCY_IN_MS: &str = "AZURE_SDK_DO_WORK_FREQUENCY_IN
 static DO_WORK_FREQUENCY_RANGE_IN_MS: std::ops::RangeInclusive<u64> = 0..=100;
 static DO_WORK_FREQUENCY_DEFAULT_IN_MS: u64 = 100;
 static AZURE_SDK_CONFIRMATION_TIMEOUT_IN_SECS: &str = "AZURE_SDK_CONFIRMATION_TIMEOUT_IN_SECS";
-static CONFIRMATION_TIMEOUT_DEFAULT_IN_SECS: u64 = 300;
+static CONFIRMATION_TIMEOUT_DEFAULT_IN_SECS: u64 = 15;
 
 #[cfg(feature = "module_client")]
 macro_rules! days_to_secs {
@@ -912,6 +912,42 @@ impl IotHubClient {
     #[allow(clippy::await_holding_refcell_ref)]
     pub async fn shutdown(&self) {
         info!("shutdown");
+
+        debug!(
+            "there are {} pending confirmations.",
+            self.confirmation_set.borrow().len()
+        );
+
+        if let Err(_) = tokio::time::timeout(
+            Duration::from_secs(Self::get_confirmation_timeout()),
+            tokio::spawn(async move {
+                while let Some(res) = self.confirmation_set.borrow().join_next().await {
+                    debug!(
+                        "there are {} pending confirmations.",
+                        self.confirmation_set.borrow().len()
+                    );
+                }
+            }),
+        )
+        .await
+        {
+            warn!(
+                "there are {} pending confirmations on shutdown.",
+                self.confirmation_set.borrow().len()
+            );
+        }
+        // spawn a task to handle the following results:
+        //   - succeeded
+        //   - failed
+        //   - timed out
+        self.confirmation_set.borrow_mut().spawn(async move {
+            match timeout(Duration::from_secs(Self::get_confirmation_timeout()), rx).await {
+                // if really needed we could pass around the json of property or D2C msg to get logged here as context
+                Ok(Ok(false)) => error!("confirmation failed"),
+                Err(_) => warn!("confirmation timed out"),
+                _ => debug!("confirmation successfully received"),
+            }
+        });
 
         /*
            We abort and join all "wait for pending confirmations" tasks
