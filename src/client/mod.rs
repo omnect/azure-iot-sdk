@@ -57,7 +57,7 @@ static AZURE_SDK_DO_WORK_FREQUENCY_IN_MS: &str = "AZURE_SDK_DO_WORK_FREQUENCY_IN
 static DO_WORK_FREQUENCY_RANGE_IN_MS: std::ops::RangeInclusive<u64> = 0..=100;
 static DO_WORK_FREQUENCY_DEFAULT_IN_MS: u64 = 100;
 static AZURE_SDK_CONFIRMATION_TIMEOUT_IN_SECS: &str = "AZURE_SDK_CONFIRMATION_TIMEOUT_IN_SECS";
-static CONFIRMATION_TIMEOUT_DEFAULT_IN_SECS: u64 = 15;
+static CONFIRMATION_TIMEOUT_DEFAULT_IN_SECS: u64 = 30;
 
 #[cfg(feature = "module_client")]
 macro_rules! days_to_secs {
@@ -1240,7 +1240,7 @@ impl IotHubClient {
                         IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_REJECTED
                     }
                     Err(e) => {
-                        error!("channel unexpectedly closed: {e}");
+                        error!("c2d msg result channel unexpectedly closed: {e}");
                         IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_REJECTED
                     }
                 }
@@ -1293,9 +1293,9 @@ impl IotHubClient {
 
         let result = Box::from_raw(context as *mut oneshot::Sender<bool>);
 
-        result
-            .send(status_code == 204)
-            .expect("c_reported_twin_callback: cannot send result");
+        if let Err(_) = result.send(status_code == 204) {
+            error!("c_reported_twin_callback: cannot send confirmation result since receiver already timed out and dropped ");
+        }
     }
 
     unsafe extern "C" fn c_direct_method_callback(
@@ -1383,7 +1383,7 @@ impl IotHubClient {
                 }
             }
             Err(e) => {
-                error!("channel unexpectedly closed: {e}");
+                error!("direct method result channel unexpectedly closed: {e}");
             }
         }
 
@@ -1430,10 +1430,10 @@ impl IotHubClient {
             before - self.confirmation_set.borrow().len()
         );
 
-        // spawn a task to handle the following results:
-        //   - succeeded
-        //   - failed
-        //   - timed out
+        // spawn a task to wait for confirmation and handle the following results:
+        //   - succeeded: confirmation callback sent success
+        //   - failed: confirmation callback sent failure
+        //   - timed out: confirmation didn't send anything
         self.confirmation_set.borrow_mut().spawn(async move {
             match timeout(Duration::from_secs(Self::get_confirmation_timeout()), rx).await {
                 // if really needed we could pass around the json of property or D2C msg to get logged here as context
