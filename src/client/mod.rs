@@ -120,6 +120,8 @@ pub enum UnauthenticatedReason {
     NoNetwork,
     /// other communication error
     CommunicationError,
+    /// unknown
+    Unknown,
 }
 
 /// Authentication status as a result of establishing a connection
@@ -1173,7 +1175,10 @@ impl IotHubClient {
                     }
                     _ => {
                         error!("unknown unauthenticated reason");
-                        return;
+
+                        AuthenticationStatus::Unauthenticated(
+                            UnauthenticatedReason::Unknown,
+                        )
                     }
                 }
             }
