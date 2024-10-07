@@ -1299,7 +1299,7 @@ impl IotHubClient {
         let result = Box::from_raw(context as *mut oneshot::Sender<bool>);
 
         if result.send(status_code == 204).is_err() {
-            error!("c_reported_twin_callback: cannot send confirmation result since receiver already timed out and dropped ");
+            error!("c_reported_twin_callback: cannot send confirmation result {status_code} since receiver already timed out and dropped ");
         }
     }
 
