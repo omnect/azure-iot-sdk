@@ -120,6 +120,8 @@ pub enum UnauthenticatedReason {
     NoNetwork,
     /// other communication error
     CommunicationError,
+    /// unknown
+    Unknown,
 }
 
 /// Authentication status as a result of establishing a connection
@@ -1173,7 +1175,10 @@ impl IotHubClient {
                     }
                     _ => {
                         error!("unknown unauthenticated reason");
-                        return;
+
+                        AuthenticationStatus::Unauthenticated(
+                            UnauthenticatedReason::Unknown,
+                        )
                     }
                 }
             }
@@ -1294,7 +1299,7 @@ impl IotHubClient {
         let result = Box::from_raw(context as *mut oneshot::Sender<bool>);
 
         if result.send(status_code == 204).is_err() {
-            error!("c_reported_twin_callback: cannot send confirmation result since receiver already timed out and dropped ");
+            error!("c_reported_twin_callback: cannot send confirmation result {status_code} since receiver already timed out and dropped ");
         }
     }
 
