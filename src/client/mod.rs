@@ -1443,9 +1443,9 @@ impl IotHubClient {
         self.confirmation_set.borrow_mut().spawn(async move {
             match timeout(Duration::from_secs(Self::get_confirmation_timeout()), rx).await {
                 // if really needed we could pass around the json of property or D2C msg to get logged here as context
-                Ok(Ok(false)) => error!("confirmation ({trace_id}) failed"),
-                Err(_) => warn!("confirmation ({trace_id}) timed out"),
-                _ => debug!("confirmation ({trace_id}) successfully received"),
+                Ok(Ok(false)) => error!("confirmation({trace_id}): failed"),
+                Err(_) => warn!("confirmation({trace_id}): timed out"),
+                _ => debug!("confirmation({trace_id}): successfully received"),
             }
         });
     }
