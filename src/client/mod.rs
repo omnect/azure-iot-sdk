@@ -878,7 +878,7 @@ impl IotHubClient {
         debug!("twin_complete: get entire twin");
 
         let Some(tx) = self.tx_twin_desired.as_deref_mut() else {
-            anyhow::bail!("twin observer not presnt")
+            anyhow::bail!("twin observer not present")
         };
 
         self.twin.twin_async(
@@ -1431,7 +1431,7 @@ impl IotHubClient {
             poll = self.confirmation_set.borrow_mut().poll_join_next(&mut cx);
         }
 
-        debug!(
+        trace!(
             "cleaned {} confirmations",
             before - self.confirmation_set.borrow().len()
         );
