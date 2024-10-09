@@ -29,6 +29,7 @@ use core::slice;
 use eis_utils::*;
 use futures::task;
 use log::{debug, error, info, trace, warn};
+use rand::Rng;
 use serde_json::json;
 use std::cell::RefCell;
 #[cfg(feature = "module_client")]
@@ -797,6 +798,7 @@ impl IotHubClient {
     /// }
     /// ```
     pub fn send_d2c_message(&self, mut message: IotMessage) -> Result<()> {
+        let trace_id: u32 = rand::thread_rng().gen();
         let handle = message.create_outgoing_handle()?;
         let queue = message.output_queue.clone();
         let (tx, rx) = oneshot::channel::<bool>();
