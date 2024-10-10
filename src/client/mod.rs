@@ -29,7 +29,6 @@ use core::slice;
 use eis_utils::*;
 use futures::task;
 use log::{debug, error, info, trace, warn};
-use rand::Rng;
 use serde_json::json;
 use std::cell::RefCell;
 #[cfg(feature = "module_client")]
@@ -39,7 +38,10 @@ use std::{
     env,
     ffi::{c_void, CStr, CString},
     mem, str,
-    sync::Once,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Once,
+    },
     task::{Context, Poll},
 };
 use tokio::{
@@ -658,6 +660,8 @@ impl IotHubClientBuilder {
     }
 }
 
+static TRACE_ID: AtomicU32 = AtomicU32::new(0);
+
 /// iothub client to be instantiated in order to initiate iothub communication
 /// ```no_run
 /// use azure_iot_sdk::client::*;
@@ -794,10 +798,10 @@ impl IotHubClient {
     /// }
     /// ```
     pub fn send_d2c_message(&self, mut message: IotMessage) -> Result<()> {
-        let trace_id: u32 = rand::thread_rng().gen();
         let handle = message.create_outgoing_handle()?;
         let queue = message.output_queue.clone();
         let (tx, rx) = oneshot::channel::<bool>();
+        let trace_id = TRACE_ID.fetch_add(1, Ordering::Relaxed);
 
         debug!("send_d2c_message({trace_id}): {queue:?}");
 
@@ -838,7 +842,7 @@ impl IotHubClient {
     /// }
     /// ```
     pub fn twin_report(&self, reported: serde_json::Value) -> Result<()> {
-        let trace_id: u32 = rand::thread_rng().gen();
+        let trace_id = TRACE_ID.fetch_add(1, Ordering::Relaxed);
         debug!("send reported({trace_id}): {reported:?}");
 
         let reported_state = CString::new(reported.to_string())?;
