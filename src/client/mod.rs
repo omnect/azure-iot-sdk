@@ -38,7 +38,10 @@ use std::{
     env,
     ffi::{c_void, CStr, CString},
     mem, str,
-    sync::Once,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Once,
+    },
     task::{Context, Poll},
 };
 use tokio::{
@@ -713,6 +716,7 @@ pub struct IotHubClient {
     model_id: Option<&'static str>,
     retry_setting: Option<RetrySetting>,
     confirmation_set: RefCell<JoinSet<()>>,
+    trace_id: AtomicU32,
 }
 
 impl IotHubClient {
@@ -796,17 +800,18 @@ impl IotHubClient {
         let handle = message.create_outgoing_handle()?;
         let queue = message.output_queue.clone();
         let (tx, rx) = oneshot::channel::<bool>();
+        let trace_id = self.trace_id.fetch_add(1, Ordering::Relaxed);
 
-        debug!("send_d2c_message: {queue:?}");
+        debug!("send_d2c_message({trace_id}): {queue:?}");
 
         self.twin.send_event_to_output_async(
             handle,
             queue,
             Some(IotHubClient::c_d2c_confirmation_callback),
-            Box::into_raw(Box::new(tx)) as *mut c_void,
+            Box::into_raw(Box::new((tx, trace_id))) as *mut c_void,
         )?;
 
-        self.spawn_confirmation(rx);
+        self.spawn_confirmation((rx, trace_id));
 
         Ok(())
     }
@@ -836,7 +841,8 @@ impl IotHubClient {
     /// }
     /// ```
     pub fn twin_report(&self, reported: serde_json::Value) -> Result<()> {
-        debug!("send reported: {reported:?}");
+        let trace_id = self.trace_id.fetch_add(1, Ordering::Relaxed);
+        debug!("send reported({trace_id}): {reported:?}");
 
         let reported_state = CString::new(reported.to_string())?;
         let size = reported_state.as_bytes().len();
@@ -846,10 +852,10 @@ impl IotHubClient {
             reported_state,
             size,
             Some(IotHubClient::c_reported_twin_callback),
-            Box::into_raw(Box::new(tx)) as *mut c_void,
+            Box::into_raw(Box::new((tx, trace_id))) as *mut c_void,
         )?;
 
-        self.spawn_confirmation(rx);
+        self.spawn_confirmation((rx, trace_id));
 
         Ok(())
     }
@@ -875,7 +881,7 @@ impl IotHubClient {
         debug!("twin_complete: get entire twin");
 
         let Some(tx) = self.tx_twin_desired.as_deref_mut() else {
-            anyhow::bail!("twin observer not presnt")
+            anyhow::bail!("twin observer not present")
         };
 
         self.twin.twin_async(
@@ -974,6 +980,7 @@ impl IotHubClient {
             model_id: params.model_id,
             retry_setting: params.retry_setting.clone(),
             confirmation_set: JoinSet::new().into(),
+            trace_id: AtomicU32::new(0),
         };
 
         client.set_callbacks()?;
@@ -1031,6 +1038,7 @@ impl IotHubClient {
             model_id: params.model_id,
             retry_setting: params.retry_setting.clone(),
             confirmation_set: JoinSet::new().into(),
+            trace_id: AtomicU32::new(0),
         };
 
         client.set_callbacks()?;
@@ -1176,9 +1184,7 @@ impl IotHubClient {
                     _ => {
                         error!("unknown unauthenticated reason");
 
-                        AuthenticationStatus::Unauthenticated(
-                            UnauthenticatedReason::Unknown,
-                        )
+                        AuthenticationStatus::Unauthenticated(UnauthenticatedReason::Unknown)
                     }
                 }
             }
@@ -1296,10 +1302,10 @@ impl IotHubClient {
     ) {
         trace!("SendReportedTwin result: {status_code}");
 
-        let result = Box::from_raw(context as *mut oneshot::Sender<bool>);
+        let (tx_confirm, trace_id) = *Box::from_raw(context as *mut (oneshot::Sender<bool>, u32));
 
-        if result.send(status_code == 204).is_err() {
-            error!("c_reported_twin_callback: cannot send confirmation result {status_code} since receiver already timed out and dropped ");
+        if tx_confirm.send(status_code == 204).is_err() {
+            error!("c_reported_twin_callback({trace_id}): cannot send result {status_code} for confirmation since receiver already timed out and dropped ");
         }
     }
 
@@ -1399,26 +1405,26 @@ impl IotHubClient {
         status: IOTHUB_CLIENT_CONFIRMATION_RESULT,
         context: *mut std::ffi::c_void,
     ) {
-        let result = Box::from_raw(context as *mut oneshot::Sender<bool>);
+        let (tx_confirm, trace_id) = *Box::from_raw(context as *mut (oneshot::Sender<bool>, u32));
         let mut succeeded = false;
 
         match status {
             IOTHUB_CLIENT_CONFIRMATION_RESULT_TAG_IOTHUB_CLIENT_CONFIRMATION_OK => {
                 succeeded = true;
-                debug!("c_d2c_confirmation_callback: received confirmation from iothub.");
+                debug!("c_d2c_confirmation_callback({trace_id}): received confirmation from iothub.");
             },
-            IOTHUB_CLIENT_CONFIRMATION_RESULT_TAG_IOTHUB_CLIENT_CONFIRMATION_BECAUSE_DESTROY => error!("c_d2c_confirmation_callback: received confirmation from iothub with error IOTHUB_CLIENT_CONFIRMATION_BECAUSE_DESTROY."),
-            IOTHUB_CLIENT_CONFIRMATION_RESULT_TAG_IOTHUB_CLIENT_CONFIRMATION_ERROR =>  error!("c_d2c_confirmation_callback: received confirmation from iothub with error IOTHUB_CLIENT_CONFIRMATION_ERROR."),
-            IOTHUB_CLIENT_CONFIRMATION_RESULT_TAG_IOTHUB_CLIENT_CONFIRMATION_MESSAGE_TIMEOUT => error!("c_d2c_confirmation_callback: received confirmation from iothub with error IOTHUB_CLIENT_CONFIRMATION_MESSAGE_TIMEOUT."),
-            _ => error!("c_d2c_confirmation_callback: received confirmation from iothub with unknown IOTHUB_CLIENT_CONFIRMATION_RESULT"),
+            IOTHUB_CLIENT_CONFIRMATION_RESULT_TAG_IOTHUB_CLIENT_CONFIRMATION_BECAUSE_DESTROY => error!("c_d2c_confirmation_callback ({trace_id}): received confirmation from iothub with error IOTHUB_CLIENT_CONFIRMATION_BECAUSE_DESTROY."),
+            IOTHUB_CLIENT_CONFIRMATION_RESULT_TAG_IOTHUB_CLIENT_CONFIRMATION_ERROR =>  error!("c_d2c_confirmation_callback ({trace_id}): received confirmation from iothub with error IOTHUB_CLIENT_CONFIRMATION_ERROR."),
+            IOTHUB_CLIENT_CONFIRMATION_RESULT_TAG_IOTHUB_CLIENT_CONFIRMATION_MESSAGE_TIMEOUT => error!("c_d2c_confirmation_callback ({trace_id}): received confirmation from iothub with error IOTHUB_CLIENT_CONFIRMATION_MESSAGE_TIMEOUT."),
+            _ => error!("c_d2c_confirmation_callback({trace_id}): received confirmation from iothub with unknown IOTHUB_CLIENT_CONFIRMATION_RESULT"),
         }
 
-        result
-            .send(succeeded)
-            .expect("c_d2c_confirmation_callback: cannot send result");
+        tx_confirm.send(succeeded).expect(&format!(
+            "c_d2c_confirmation_callback({trace_id}): cannot send confirmation result"
+        ));
     }
 
-    fn spawn_confirmation(&self, rx: oneshot::Receiver<bool>) {
+    fn spawn_confirmation(&self, (rx, trace_id): (oneshot::Receiver<bool>, u32)) {
         let before = self.confirmation_set.borrow().len();
         let waker = task::noop_waker();
         let mut cx = Context::from_waker(&waker);
@@ -1430,7 +1436,7 @@ impl IotHubClient {
             poll = self.confirmation_set.borrow_mut().poll_join_next(&mut cx);
         }
 
-        debug!(
+        trace!(
             "cleaned {} confirmations",
             before - self.confirmation_set.borrow().len()
         );
@@ -1442,9 +1448,9 @@ impl IotHubClient {
         self.confirmation_set.borrow_mut().spawn(async move {
             match timeout(Duration::from_secs(Self::get_confirmation_timeout()), rx).await {
                 // if really needed we could pass around the json of property or D2C msg to get logged here as context
-                Ok(Ok(false)) => error!("confirmation failed"),
-                Err(_) => warn!("confirmation timed out"),
-                _ => debug!("confirmation successfully received"),
+                Ok(Ok(false)) => error!("confirmation({trace_id}): failed"),
+                Err(_) => warn!("confirmation({trace_id}): timed out"),
+                _ => debug!("confirmation({trace_id}): successfully received"),
             }
         });
     }
