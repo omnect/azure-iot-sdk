@@ -660,8 +660,6 @@ impl IotHubClientBuilder {
     }
 }
 
-static TRACE_ID: AtomicU32 = AtomicU32::new(0);
-
 /// iothub client to be instantiated in order to initiate iothub communication
 /// ```no_run
 /// use azure_iot_sdk::client::*;
