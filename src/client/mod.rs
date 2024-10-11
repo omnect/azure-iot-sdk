@@ -1419,9 +1419,9 @@ impl IotHubClient {
             _ => error!("c_d2c_confirmation_callback({trace_id}): received confirmation from iothub with unknown IOTHUB_CLIENT_CONFIRMATION_RESULT"),
         }
 
-        tx_confirm.send(succeeded).expect(&format!(
-            "c_d2c_confirmation_callback({trace_id}): cannot send confirmation result"
-        ));
+        tx_confirm.send(succeeded).unwrap_or_else(|_| {
+            panic!("c_d2c_confirmation_callback({trace_id}): cannot send confirmation result")
+        });
     }
 
     fn spawn_confirmation(&self, (rx, trace_id): (oneshot::Receiver<bool>, u32)) {
