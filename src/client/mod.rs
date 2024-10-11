@@ -660,8 +660,6 @@ impl IotHubClientBuilder {
     }
 }
 
-static TRACE_ID: AtomicU32 = AtomicU32::new(0);
-
 /// iothub client to be instantiated in order to initiate iothub communication
 /// ```no_run
 /// use azure_iot_sdk::client::*;
@@ -718,6 +716,7 @@ pub struct IotHubClient {
     model_id: Option<&'static str>,
     retry_setting: Option<RetrySetting>,
     confirmation_set: RefCell<JoinSet<()>>,
+    trace_id: AtomicU32,
 }
 
 impl IotHubClient {
@@ -801,7 +800,7 @@ impl IotHubClient {
         let handle = message.create_outgoing_handle()?;
         let queue = message.output_queue.clone();
         let (tx, rx) = oneshot::channel::<bool>();
-        let trace_id = TRACE_ID.fetch_add(1, Ordering::Relaxed);
+        let trace_id = self.trace_id.fetch_add(1, Ordering::Relaxed);
 
         debug!("send_d2c_message({trace_id}): {queue:?}");
 
@@ -842,7 +841,7 @@ impl IotHubClient {
     /// }
     /// ```
     pub fn twin_report(&self, reported: serde_json::Value) -> Result<()> {
-        let trace_id = TRACE_ID.fetch_add(1, Ordering::Relaxed);
+        let trace_id = self.trace_id.fetch_add(1, Ordering::Relaxed);
         debug!("send reported({trace_id}): {reported:?}");
 
         let reported_state = CString::new(reported.to_string())?;
@@ -981,6 +980,7 @@ impl IotHubClient {
             model_id: params.model_id,
             retry_setting: params.retry_setting.clone(),
             confirmation_set: JoinSet::new().into(),
+            trace_id: AtomicU32::new(0),
         };
 
         client.set_callbacks()?;
@@ -1038,6 +1038,7 @@ impl IotHubClient {
             model_id: params.model_id,
             retry_setting: params.retry_setting.clone(),
             confirmation_set: JoinSet::new().into(),
+            trace_id: AtomicU32::new(0),
         };
 
         client.set_callbacks()?;
