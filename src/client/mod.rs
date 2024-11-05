@@ -1001,8 +1001,10 @@ impl IotHubClient {
                 .saturating_add(Duration::from_secs(days_to_secs!(30))),
         )
         .await
-        .inspect_err(|err| {
+        .map_err(|err| {
             error!("iot identity service failed to create module client identity: {err}.");
+
+            err
         })?;
 
         debug!(
