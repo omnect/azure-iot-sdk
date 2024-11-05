@@ -98,6 +98,7 @@ pub enum TwinUpdateState {
 }
 
 /// Used to update [desired properties](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-devguide-module-twins#back-end-operations) to the client
+#[derive(Debug)]
 pub struct TwinUpdate {
     /// type of update [`TwinUpdateState`]
     pub state: TwinUpdateState,
@@ -140,6 +141,7 @@ pub enum AuthenticationStatus {
 pub type AuthenticationObserver = mpsc::Sender<AuthenticationStatus>;
 
 /// DirectMethod
+#[derive(Debug)]
 pub struct DirectMethod {
     /// method name
     pub name: String,
@@ -154,6 +156,7 @@ pub type DirectMethodResponder = oneshot::Sender<Result<Option<serde_json::Value
 pub type DirectMethodObserver = mpsc::Sender<DirectMethod>;
 
 /// IncomingIotMessage
+#[derive(Debug)]
 pub struct IncomingIotMessage {
     /// [`IotMessage`]
     pub inner: IotMessage,
