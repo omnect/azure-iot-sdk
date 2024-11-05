@@ -996,18 +996,14 @@ impl IotHubClient {
     #[cfg(feature = "module_client")]
     pub(crate) async fn from_identity_service(params: &IotHubClientBuilder) -> Result<Self> {
         let connection_info = request_connection_string_from_eis_with_expiry(
-                SystemTime::now()
-                    .duration_since(SystemTime::UNIX_EPOCH)?
-                    .saturating_add(Duration::from_secs(days_to_secs!(30))),
-            ).await
-            .map_err(|err| {
-                if cfg!(device_client) {
-                    error!("iot identity service failed to create device client identity.
-                    In case you use TPM attestation please note that this combination is currently not supported.");
-                }
-
-                err
-            })?;
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)?
+                .saturating_add(Duration::from_secs(days_to_secs!(30))),
+        )
+        .await
+        .inspect_err(|err| {
+            error!("iot identity service failed to create module client identity: {err}.");
+        })?;
 
         debug!(
             "used con_str: {}",
