@@ -3,7 +3,7 @@ authors = ["omnect@conplement.de>"]
 edition = "2021"
 name = "azure-iot-sdk"
 repository = "git@github.com:omnect/azure-iot-sdk.git"
-version = "0.13.7"
+version = "0.13.8"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

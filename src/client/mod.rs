@@ -1306,7 +1306,7 @@ impl IotHubClient {
         let (tx_confirm, trace_id) = *Box::from_raw(context as *mut (oneshot::Sender<bool>, u32));
 
         if tx_confirm.send(status_code == 204).is_err() {
-            error!("c_reported_twin_callback({trace_id}): cannot send result {status_code} for confirmation since receiver already timed out and dropped ");
+            error!("c_reported_twin_callback({trace_id}): cannot send result {status_code} for confirmation since receiver already timed out and dropped");
         }
     }
 
@@ -1420,9 +1420,9 @@ impl IotHubClient {
             _ => error!("c_d2c_confirmation_callback({trace_id}): received confirmation from iothub with unknown IOTHUB_CLIENT_CONFIRMATION_RESULT"),
         }
 
-        tx_confirm.send(succeeded).unwrap_or_else(|_| {
-            panic!("c_d2c_confirmation_callback({trace_id}): cannot send confirmation result")
-        });
+        if tx_confirm.send(succeeded).is_err() {
+            error!("c_d2c_confirmation_callback({trace_id}): cannot send confirmation result since receiver already timed out and dropped")
+        };
     }
 
     fn spawn_confirmation(&self, (rx, trace_id): (oneshot::Receiver<bool>, u32)) {
