@@ -1301,12 +1301,15 @@ impl IotHubClient {
         status_code: std::os::raw::c_int,
         context: *mut ::std::os::raw::c_void,
     ) {
-        trace!("SendReportedTwin result: {status_code}");
-
+        let succeeded = status_code == 204;
         let (tx_confirm, trace_id) = *Box::from_raw(context as *mut (oneshot::Sender<bool>, u32));
 
-        if tx_confirm.send(status_code == 204).is_err() {
-            error!("c_reported_twin_callback({trace_id}): cannot send result {status_code} for confirmation since receiver already timed out and dropped");
+        if !succeeded {
+            error!("c_reported_twin_callback({trace_id}): confirmation failed with status code: {status_code}");
+        }
+
+        if tx_confirm.send(succeeded).is_err() {
+            error!("c_reported_twin_callback({trace_id}): cannot send confirmation result since receiver already timed out and dropped");
         }
     }
 
