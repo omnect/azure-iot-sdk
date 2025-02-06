@@ -9,13 +9,16 @@ version = "0.13.9"
 
 [dependencies]
 anyhow = "1.0"
-#azure-iot-sdk-sys = { git = "https://github.com/omnect/azure-iot-sdk-sys.git", tag = "0.6.1", default-features = false }
-azure-iot-sdk-sys = { git = "https://github.com/janzachmann/azure-iot-sdk-sys.git", branch = "chore", default-features = false }
+azure-iot-sdk-sys = { git = "https://github.com/omnect/azure-iot-sdk-sys.git", tag = "0.6.2", default-features = false }
 eis-utils = { git = "https://github.com/omnect/eis-utils.git", default-features = false, tag = "0.3.3", optional = true }
 futures = { version = "0.3", default-features = false }
 log = { version = "0.4", default-features = false }
 serde_json = { version = "1.0", default-features = false }
-tokio = { version = "1", default-features = false , features = ["rt", "sync", "time"] }
+tokio = { version = "1", default-features = false, features = [
+  "rt",
+  "sync",
+  "time",
+] }
 url = { version = "2.4", default-features = false }
 
 [dev-dependencies]
