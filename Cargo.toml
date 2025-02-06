@@ -13,7 +13,7 @@ azure-iot-sdk-sys = { git = "https://github.com/omnect/azure-iot-sdk-sys.git", t
 eis-utils = { git = "https://github.com/omnect/eis-utils.git", default-features = false, tag = "0.3.3", optional = true }
 futures = { version = "0.3", default-features = false }
 log = { version = "0.4", default-features = false }
-serde_json = { version = "1.0", default-features = false }
+serde_json = { version = "1.0", default-features = false, features = ["std"] }
 tokio = { version = "1", default-features = false, features = [
   "rt",
   "sync",
