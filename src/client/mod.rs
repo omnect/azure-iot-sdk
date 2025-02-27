@@ -917,11 +917,11 @@ impl IotHubClient {
     ///
     ///     client.twin_report(reported);
     ///
-    ///     client.shutdown();
+    ///     client.shutdown(tokio::time::Duration::from_secs(5));
     /// }
     /// ```
     #[allow(clippy::await_holding_refcell_ref)]
-    pub async fn shutdown(&self) {
+    pub async fn shutdown(&self, timeout: Duration) {
         info!("shutdown");
 
         let join_all = async {
@@ -938,13 +938,7 @@ impl IotHubClient {
             {}
         };
 
-        if tokio::time::timeout(
-            Duration::from_secs(Self::get_confirmation_timeout()),
-            join_all,
-        )
-        .await
-        .is_err()
-        {
+        if tokio::time::timeout(timeout, join_all).await.is_err() {
             warn!(
                 "there are {} pending confirmations on shutdown.",
                 self.confirmation_set.borrow().len()
