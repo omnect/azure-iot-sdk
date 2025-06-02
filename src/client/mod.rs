@@ -4,16 +4,24 @@
     feature = "edge_client",
     doc
 )))]
-compile_error!("Either feature 'device_client' 'module_client' xor 'edge_client' feature must be enabled for this crate.");
+compile_error!(
+    "Either feature 'device_client' 'module_client' xor 'edge_client' feature must be enabled for this crate."
+);
 
 #[cfg(all(feature = "device_client", feature = "module_client"))]
-compile_error!("Either feature 'device_client' 'module_client' xor 'edge_client' feature must be enabled for this crate.");
+compile_error!(
+    "Either feature 'device_client' 'module_client' xor 'edge_client' feature must be enabled for this crate."
+);
 
 #[cfg(all(feature = "device_client", feature = "edge_client"))]
-compile_error!("Either feature 'device_client' 'module_client' xor 'edge_client' feature must be enabled for this crate.");
+compile_error!(
+    "Either feature 'device_client' 'module_client' xor 'edge_client' feature must be enabled for this crate."
+);
 
 #[cfg(all(feature = "module_client", feature = "edge_client"))]
-compile_error!("Either feature 'device_client' 'module_client' xor 'edge_client' feature must be enabled for this crate.");
+compile_error!(
+    "Either feature 'device_client' 'module_client' xor 'edge_client' feature must be enabled for this crate."
+);
 
 pub use self::message::{Direction, DispositionResult, IotMessage, IotMessageBuilder};
 pub use self::twin::ClientType;
@@ -36,18 +44,18 @@ use std::time::SystemTime;
 use std::{
     boxed::Box,
     env,
-    ffi::{c_void, CStr, CString},
+    ffi::{CStr, CString, c_void},
     mem, str,
     sync::{
+        OnceLock,
         atomic::{AtomicU32, Ordering},
-        Once,
     },
     task::{Context, Poll},
 };
 use tokio::{
     sync::{mpsc, oneshot},
     task::{JoinError, JoinSet},
-    time::{timeout, Duration},
+    time::{Duration, timeout},
 };
 
 /// iothub cloud to device (C2D) and device to cloud (D2C) messages
@@ -1044,18 +1052,13 @@ impl IotHubClient {
     }
 
     fn iothub_init() -> Result<()> {
-        static IOTHUB_INIT_ONCE: Once = Once::new();
-        static mut IOTHUB_INIT_RESULT: i32 = -1;
+        static IOTHUB_INIT_RESULT: OnceLock<i32> = OnceLock::new();
 
-        unsafe {
-            IOTHUB_INIT_ONCE.call_once(|| {
-                IOTHUB_INIT_RESULT = IoTHub_Init();
-            });
+        let result = *IOTHUB_INIT_RESULT.get_or_init(|| unsafe { IoTHub_Init() });
 
-            match IOTHUB_INIT_RESULT {
-                0 => Ok(()),
-                _ => anyhow::bail!("error while IoTHub_Init()"),
-            }
+        match result {
+            0 => Ok(()),
+            _ => anyhow::bail!("error while IoTHub_Init()"),
         }
     }
 
@@ -1100,7 +1103,9 @@ impl IotHubClient {
                     info!("set do_work frequency {freq}ms");
                     do_work_freq = Some(freq);
                 }
-                _ => error!("ignore do_work frequency {freq} since not in range of {DO_WORK_FREQUENCY_RANGE_IN_MS:?}ms"),
+                _ => error!(
+                    "ignore do_work frequency {freq} since not in range of {DO_WORK_FREQUENCY_RANGE_IN_MS:?}ms"
+                ),
             };
         }
 
@@ -1141,12 +1146,12 @@ impl IotHubClient {
         Ok(())
     }
 
-    unsafe extern "C" fn c_connection_status_callback(
+    extern "C" fn c_connection_status_callback(
         connection_status: IOTHUB_CLIENT_CONNECTION_STATUS,
         status_reason: IOTHUB_CLIENT_CONNECTION_STATUS_REASON,
         context: *mut ::std::os::raw::c_void,
     ) {
-        let tx = &mut *(context as *mut AuthenticationObserver);
+        let tx = unsafe { &mut *(context as *mut AuthenticationObserver) };
 
         let status = match connection_status {
             IOTHUB_CLIENT_CONNECTION_STATUS_TAG_IOTHUB_CLIENT_CONNECTION_AUTHENTICATED => {
@@ -1195,11 +1200,11 @@ impl IotHubClient {
             .expect("c_connection_status_callback: cannot blocking_send");
     }
 
-    unsafe extern "C" fn c_c2d_message_callback(
+    extern "C" fn c_c2d_message_callback(
         handle: *mut IOTHUB_MESSAGE_HANDLE_DATA_TAG,
         context: *mut ::std::os::raw::c_void,
     ) -> IOTHUBMESSAGE_DISPOSITION_RESULT {
-        let observer = &mut *(context as *mut IncomingMessageObserver);
+        let observer = unsafe { &mut *(context as *mut IncomingMessageObserver) };
         let mut property_keys: Vec<CString> = vec![];
 
         for property in &observer.properties {
@@ -1258,56 +1263,63 @@ impl IotHubClient {
         }
     }
 
-    unsafe extern "C" fn c_twin_callback(
+    extern "C" fn c_twin_callback(
         state: DEVICE_TWIN_UPDATE_STATE,
         payload: *const ::std::os::raw::c_uchar,
         size: usize,
         context: *mut ::std::os::raw::c_void,
     ) {
-        let tx = &mut *(context as *mut TwinObserver);
+        unsafe {
+            let tx = &mut *(context as *mut TwinObserver);
 
-        match String::from_utf8(slice::from_raw_parts(payload, size).to_vec()) {
-            Ok(desired_string) => {
-                match serde_json::from_str::<serde_json::Value>(&desired_string) {
-                    Ok(desired_json) => {
-                        let desired_state: TwinUpdateState = mem::transmute(state as i8);
+            match String::from_utf8(slice::from_raw_parts(payload, size).to_vec()) {
+                Ok(desired_string) => {
+                    match serde_json::from_str::<serde_json::Value>(&desired_string) {
+                        Ok(desired_json) => {
+                            let desired_state: TwinUpdateState = mem::transmute(state as i8);
 
-                        debug!(
-                            "Twin callback. state: {desired_state:?} size: {size} payload: {desired_json}"
-                        );
+                            debug!(
+                                "Twin callback. state: {desired_state:?} size: {size} payload: {desired_json}"
+                            );
 
-                        tx.blocking_send(TwinUpdate {
-                            state: desired_state,
-                            value: desired_json,
-                        })
-                        .expect("c_twin_callback: cannot blocking_send");
-                    }
-                    Err(e) => error!(
-                        "desired twin cannot be parsed. payload: {desired_string} error: {e}"
-                    ),
-                };
+                            tx.blocking_send(TwinUpdate {
+                                state: desired_state,
+                                value: desired_json,
+                            })
+                            .expect("c_twin_callback: cannot blocking_send");
+                        }
+                        Err(e) => error!(
+                            "desired twin cannot be parsed. payload: {desired_string} error: {e}"
+                        ),
+                    };
+                }
+                Err(e) => error!("desired twin cannot be parsed: {e}"),
             }
-            Err(e) => error!("desired twin cannot be parsed: {e}"),
         }
     }
 
-    unsafe extern "C" fn c_reported_twin_callback(
+    extern "C" fn c_reported_twin_callback(
         status_code: std::os::raw::c_int,
         context: *mut ::std::os::raw::c_void,
     ) {
         let succeeded = status_code == 204;
-        let (tx_confirm, trace_id) = *Box::from_raw(context as *mut (oneshot::Sender<bool>, u32));
+        let (tx_confirm, trace_id) =
+            unsafe { *Box::from_raw(context as *mut (oneshot::Sender<bool>, u32)) };
 
         if !succeeded {
-            error!("c_reported_twin_callback({trace_id}): confirmation failed with status code: {status_code}");
+            error!(
+                "c_reported_twin_callback({trace_id}): confirmation failed with status code: {status_code}"
+            );
         }
 
         if tx_confirm.send(succeeded).is_err() {
-            error!("c_reported_twin_callback({trace_id}): cannot send confirmation result since receiver already timed out and dropped");
+            error!(
+                "c_reported_twin_callback({trace_id}): cannot send confirmation result since receiver already timed out and dropped"
+            );
         }
     }
 
-    unsafe extern "C" fn c_direct_method_callback(
+    extern "C" fn c_direct_method_callback(
         method_name: *const ::std::os::raw::c_char,
         payload: *const ::std::os::raw::c_uchar,
         size: usize,
@@ -1318,107 +1330,123 @@ impl IotHubClient {
         const METHOD_RESPONSE_SUCCESS: i32 = 200;
         const METHOD_RESPONSE_ERROR: i32 = 401;
 
-        let tx_direct_method = &mut *(context as *mut DirectMethodObserver);
-
-        let empty_result: CString = CString::from_vec_unchecked(b"{ }".to_vec());
-        *response_size = empty_result.as_bytes().len();
-        *response = empty_result.into_raw() as *mut u8;
-
-        let method_name = match CStr::from_ptr(method_name).to_str() {
-            Ok(name) => name,
-            Err(e) => {
-                error!("cannot parse method name: {e}");
-                return METHOD_RESPONSE_ERROR;
-            }
-        };
-
-        let payload: serde_json::Value = match str::from_utf8(slice::from_raw_parts(payload, size))
-        {
-            Ok(p) => match serde_json::from_str(p) {
-                Ok(json) => json,
+        unsafe {
+            let tx_direct_method = &mut *(context as *mut DirectMethodObserver);
+            let empty_result: CString = CString::from_vec_unchecked(b"{ }".to_vec());
+            *response_size = empty_result.as_bytes().len();
+            *response = empty_result.into_raw() as *mut u8;
+            let method_name = match CStr::from_ptr(method_name).to_str() {
+                Ok(name) => name,
                 Err(e) => {
-                    error!("cannot parse direct method payload: {e}");
+                    error!("cannot parse method name: {e}");
                     return METHOD_RESPONSE_ERROR;
                 }
-            },
-            Err(e) => {
-                error!("cannot parse direct method payload: {e}");
-                return METHOD_RESPONSE_ERROR;
-            }
-        };
-
-        debug!("Received direct method call: {method_name:?} with payload: {payload}");
-
-        let (tx_result, rx_result) = oneshot::channel::<Result<Option<serde_json::Value>>>();
-
-        tx_direct_method
-            .blocking_send(DirectMethod {
-                name: method_name.to_string(),
-                payload,
-                responder: tx_result,
-            })
-            .expect("c_direct_method_callback: cannot blocking_send");
-
-        match rx_result.blocking_recv() {
-            Ok(Ok(None)) => {
-                debug!("direct method has no result");
-                return METHOD_RESPONSE_SUCCESS;
-            }
-            Ok(Ok(Some(result))) => {
-                debug!("direct method result: {result:?}");
-
-                match CString::new(result.to_string()) {
-                    Ok(r) => {
-                        *response_size = r.as_bytes().len();
-                        *response = r.into_raw() as *mut u8;
-                        return METHOD_RESPONSE_SUCCESS;
-                    }
+            };
+            let payload: serde_json::Value =
+                match str::from_utf8(slice::from_raw_parts(payload, size)) {
+                    Ok(p) => match serde_json::from_str(p) {
+                        Ok(json) => json,
+                        Err(e) => {
+                            error!("cannot parse direct method payload: {e}");
+                            return METHOD_RESPONSE_ERROR;
+                        }
+                    },
                     Err(e) => {
-                        error!("cannot parse direct method result: {e}");
+                        error!("cannot parse direct method payload: {e}");
+                        return METHOD_RESPONSE_ERROR;
+                    }
+                };
+
+            debug!("Received direct method call: {method_name:?} with payload: {payload}");
+
+            let (tx_result, rx_result) = oneshot::channel::<Result<Option<serde_json::Value>>>();
+
+            tx_direct_method
+                .blocking_send(DirectMethod {
+                    name: method_name.to_string(),
+                    payload,
+                    responder: tx_result,
+                })
+                .expect("c_direct_method_callback: cannot blocking_send");
+
+            match rx_result.blocking_recv() {
+                Ok(Ok(None)) => {
+                    debug!("direct method has no result");
+                    return METHOD_RESPONSE_SUCCESS;
+                }
+                Ok(Ok(Some(result))) => {
+                    debug!("direct method result: {result:?}");
+
+                    match CString::new(result.to_string()) {
+                        Ok(r) => {
+                            *response_size = r.as_bytes().len();
+                            *response = r.into_raw() as *mut u8;
+                            return METHOD_RESPONSE_SUCCESS;
+                        }
+                        Err(e) => {
+                            error!("cannot parse direct method result: {e}");
+                        }
                     }
                 }
-            }
-            Ok(Err(e)) => {
-                error!("direct method error: {e:?}");
+                Ok(Err(e)) => {
+                    error!("direct method error: {e:?}");
 
-                match CString::new(json!(e.to_string()).to_string()) {
-                    Ok(r) => {
-                        *response_size = r.as_bytes().len();
-                        *response = r.into_raw() as *mut u8;
-                    }
-                    Err(e) => {
-                        error!("cannot parse direct method result: {e}");
+                    match CString::new(json!(e.to_string()).to_string()) {
+                        Ok(r) => {
+                            *response_size = r.as_bytes().len();
+                            *response = r.into_raw() as *mut u8;
+                        }
+                        Err(e) => {
+                            error!("cannot parse direct method result: {e}");
+                        }
                     }
                 }
+                Err(e) => {
+                    error!("direct method result channel unexpectedly closed: {e}");
+                }
             }
-            Err(e) => {
-                error!("direct method result channel unexpectedly closed: {e}");
-            }
+
+            METHOD_RESPONSE_ERROR
         }
-
-        METHOD_RESPONSE_ERROR
     }
 
-    unsafe extern "C" fn c_d2c_confirmation_callback(
+    extern "C" fn c_d2c_confirmation_callback(
         status: IOTHUB_CLIENT_CONFIRMATION_RESULT,
         context: *mut std::ffi::c_void,
     ) {
-        let (tx_confirm, trace_id) = *Box::from_raw(context as *mut (oneshot::Sender<bool>, u32));
+        let (tx_confirm, trace_id) =
+            unsafe { *Box::from_raw(context as *mut (oneshot::Sender<bool>, u32)) };
         let mut succeeded = false;
 
         match status {
             IOTHUB_CLIENT_CONFIRMATION_RESULT_TAG_IOTHUB_CLIENT_CONFIRMATION_OK => {
                 succeeded = true;
-                debug!("c_d2c_confirmation_callback({trace_id}): received confirmation from iothub.");
-            },
-            IOTHUB_CLIENT_CONFIRMATION_RESULT_TAG_IOTHUB_CLIENT_CONFIRMATION_BECAUSE_DESTROY => error!("c_d2c_confirmation_callback ({trace_id}): received confirmation from iothub with error IOTHUB_CLIENT_CONFIRMATION_BECAUSE_DESTROY."),
-            IOTHUB_CLIENT_CONFIRMATION_RESULT_TAG_IOTHUB_CLIENT_CONFIRMATION_ERROR =>  error!("c_d2c_confirmation_callback ({trace_id}): received confirmation from iothub with error IOTHUB_CLIENT_CONFIRMATION_ERROR."),
-            IOTHUB_CLIENT_CONFIRMATION_RESULT_TAG_IOTHUB_CLIENT_CONFIRMATION_MESSAGE_TIMEOUT => error!("c_d2c_confirmation_callback ({trace_id}): received confirmation from iothub with error IOTHUB_CLIENT_CONFIRMATION_MESSAGE_TIMEOUT."),
-            _ => error!("c_d2c_confirmation_callback({trace_id}): received confirmation from iothub with unknown IOTHUB_CLIENT_CONFIRMATION_RESULT"),
+                debug!(
+                    "c_d2c_confirmation_callback({trace_id}): received confirmation from iothub."
+                );
+            }
+            IOTHUB_CLIENT_CONFIRMATION_RESULT_TAG_IOTHUB_CLIENT_CONFIRMATION_BECAUSE_DESTROY => {
+                error!(
+                    "c_d2c_confirmation_callback ({trace_id}): received confirmation from iothub with error IOTHUB_CLIENT_CONFIRMATION_BECAUSE_DESTROY."
+                )
+            }
+            IOTHUB_CLIENT_CONFIRMATION_RESULT_TAG_IOTHUB_CLIENT_CONFIRMATION_ERROR => error!(
+                "c_d2c_confirmation_callback ({trace_id}): received confirmation from iothub with error IOTHUB_CLIENT_CONFIRMATION_ERROR."
+            ),
+            IOTHUB_CLIENT_CONFIRMATION_RESULT_TAG_IOTHUB_CLIENT_CONFIRMATION_MESSAGE_TIMEOUT => {
+                error!(
+                    "c_d2c_confirmation_callback ({trace_id}): received confirmation from iothub with error IOTHUB_CLIENT_CONFIRMATION_MESSAGE_TIMEOUT."
+                )
+            }
+            _ => error!(
+                "c_d2c_confirmation_callback({trace_id}): received confirmation from iothub with unknown IOTHUB_CLIENT_CONFIRMATION_RESULT"
+            ),
         }
 
         if tx_confirm.send(succeeded).is_err() {
-            error!("c_d2c_confirmation_callback({trace_id}): cannot send confirmation result since receiver already timed out and dropped")
+            error!(
+                "c_d2c_confirmation_callback({trace_id}): cannot send confirmation result since receiver already timed out and dropped"
+            )
         };
     }
 
@@ -1454,33 +1482,22 @@ impl IotHubClient {
     }
 
     fn get_confirmation_timeout() -> u64 {
-        static INIT: Once = Once::new();
-        static mut CONFIRMATION_TIMEOUT_IN_SECS: u64 = CONFIRMATION_TIMEOUT_DEFAULT_IN_SECS;
+        static CONFIRMATION_TIMEOUT_IN_SECS: OnceLock<u64> = OnceLock::new();
 
-        unsafe {
-            INIT.call_once(|| {
-                let mut confirmation_timeout_secs = None;
+        *CONFIRMATION_TIMEOUT_IN_SECS.get_or_init(|| {
+            if let Ok(timeout_secs) = env::var(AZURE_SDK_CONFIRMATION_TIMEOUT_IN_SECS) {
+                match timeout_secs.parse::<u64>() {
+                    Ok(timeout_secs) => {
+                        info!("set confirmation timeout to {timeout_secs}s");
+                        return timeout_secs;
+                    }
+                    _ => error!("AZURE_SDK_CONFIRMATION_TIMEOUT_IN_SECS: ignore invalid confirmation timeout {timeout_secs}"),
+                };
+            }
 
-                if let Ok(timeout_secs) = env::var(AZURE_SDK_CONFIRMATION_TIMEOUT_IN_SECS) {
-                    match timeout_secs.parse::<u64>() {
-                        Ok(timeout_secs) => {
-                            info!("set confirmation timeout to {timeout_secs}s");
-                            confirmation_timeout_secs = Some(timeout_secs);
-                        }
-                        _ => error!("ignore invalid confirmation timeout {timeout_secs}"),
-                    };
-                }
-
-                if confirmation_timeout_secs.is_none() {
-                    confirmation_timeout_secs = Some(CONFIRMATION_TIMEOUT_DEFAULT_IN_SECS);
-                    info!(
-                        "set default confirmation timeout {CONFIRMATION_TIMEOUT_DEFAULT_IN_SECS}s"
-                    )
-                }
-                CONFIRMATION_TIMEOUT_IN_SECS = confirmation_timeout_secs.unwrap()
-            });
-            CONFIRMATION_TIMEOUT_IN_SECS
-        }
+            info!("set default confirmation timeout {CONFIRMATION_TIMEOUT_DEFAULT_IN_SECS}s");
+            CONFIRMATION_TIMEOUT_DEFAULT_IN_SECS
+        })
     }
 }
 

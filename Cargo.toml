@@ -1,19 +1,19 @@
 [package]
 authors = ["omnect@conplement.de>"]
-edition = "2021"
+edition = "2024"
 homepage = "www.omnect.io"
 license = "MIT OR Apache-2.0"
 name = "azure-iot-sdk"
 readme = "README.md"
 repository = "git@github.com:omnect/azure-iot-sdk.git"
-version = "0.14.0"
+version = "0.14.1"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 anyhow = "1.0"
-azure-iot-sdk-sys = { git = "https://github.com/omnect/azure-iot-sdk-sys.git", tag = "0.6.2", default-features = false }
-eis-utils = { git = "https://github.com/omnect/eis-utils.git", default-features = false, tag = "0.3.3", optional = true }
+azure-iot-sdk-sys = { git = "https://github.com/omnect/azure-iot-sdk-sys.git", tag = "0.6.3", default-features = false }
+eis-utils = { git = "https://github.com/omnect/eis-utils.git", default-features = false, tag = "0.3.4", optional = true }
 futures = { version = "0.3", default-features = false }
 log = { version = "0.4", default-features = false }
 serde_json = { version = "1.0", default-features = false, features = ["std"] }
@@ -22,7 +22,7 @@ tokio = { version = "1", default-features = false, features = [
   "sync",
   "time",
 ] }
-url = { version = "2.4", default-features = false }
+url = { version = "2.5", default-features = false }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
