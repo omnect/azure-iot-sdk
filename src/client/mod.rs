@@ -1196,8 +1196,9 @@ impl IotHubClient {
 
         debug!("Received connection status: {status:?}");
 
-        tx.blocking_send(status)
-            .expect("c_connection_status_callback: cannot blocking_send");
+        if tx.blocking_send(status).is_err() {
+            warn!("c_connection_status_callback: observer channel closed, skip status");
+        }
     }
 
     extern "C" fn c_c2d_message_callback(
@@ -1225,13 +1226,18 @@ impl IotHubClient {
 
                 let (tx_result, rx_result) = oneshot::channel::<Result<DispositionResult>>();
 
-                observer
+                if observer
                     .responder
                     .blocking_send(IncomingIotMessage {
                         inner: msg,
                         responder: tx_result,
                     })
-                    .expect("c_c2d_message_callback: cannot blocking_send");
+                    .is_err()
+                {
+                    // abandon, so that iothub delivers the message again
+                    warn!("c_c2d_message_callback: observer channel closed, abandon message");
+                    return IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_ABANDONED;
+                }
 
                 match rx_result.blocking_recv() {
                     Ok(Ok(DispositionResult::Accepted)) => {
@@ -1282,11 +1288,15 @@ impl IotHubClient {
                                 "Twin callback. state: {desired_state:?} size: {size} payload: {desired_json}"
                             );
 
-                            tx.blocking_send(TwinUpdate {
-                                state: desired_state,
-                                value: desired_json,
-                            })
-                            .expect("c_twin_callback: cannot blocking_send");
+                            if tx
+                                .blocking_send(TwinUpdate {
+                                    state: desired_state,
+                                    value: desired_json,
+                                })
+                                .is_err()
+                            {
+                                warn!("c_twin_callback: observer channel closed, skip update");
+                            }
                         }
                         Err(e) => error!(
                             "desired twin cannot be parsed. payload: {desired_string} error: {e}"
@@ -1361,13 +1371,17 @@ impl IotHubClient {
 
             let (tx_result, rx_result) = oneshot::channel::<Result<Option<serde_json::Value>>>();
 
-            tx_direct_method
+            if tx_direct_method
                 .blocking_send(DirectMethod {
                     name: method_name.to_string(),
                     payload,
                     responder: tx_result,
                 })
-                .expect("c_direct_method_callback: cannot blocking_send");
+                .is_err()
+            {
+                error!("c_direct_method_callback: observer channel closed");
+                return METHOD_RESPONSE_ERROR;
+            }
 
             match rx_result.blocking_recv() {
                 Ok(Ok(None)) => {
@@ -1504,5 +1518,83 @@ impl IotHubClient {
 impl Drop for IotHubClient {
     fn drop(&mut self) {
         self.twin.destroy()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn connection_status_callback_with_closed_channel() {
+        let (mut tx, rx) = mpsc::channel::<AuthenticationStatus>(1);
+        drop(rx);
+
+        IotHubClient::c_connection_status_callback(
+            IOTHUB_CLIENT_CONNECTION_STATUS_TAG_IOTHUB_CLIENT_CONNECTION_AUTHENTICATED,
+            IOTHUB_CLIENT_CONNECTION_STATUS_REASON_TAG_IOTHUB_CLIENT_CONNECTION_OK,
+            &mut tx as *mut AuthenticationObserver as *mut c_void,
+        );
+    }
+
+    #[test]
+    fn twin_callback_with_closed_channel() {
+        let (mut tx, rx) = mpsc::channel::<TwinUpdate>(1);
+        drop(rx);
+        let payload = br#"{"desired":{}}"#;
+
+        IotHubClient::c_twin_callback(
+            DEVICE_TWIN_UPDATE_STATE_TAG_DEVICE_TWIN_UPDATE_COMPLETE,
+            payload.as_ptr(),
+            payload.len(),
+            &mut tx as *mut TwinObserver as *mut c_void,
+        );
+    }
+
+    #[test]
+    fn direct_method_callback_with_closed_channel() {
+        let (mut tx, rx) = mpsc::channel::<DirectMethod>(1);
+        drop(rx);
+        let method_name = c"test";
+        let payload = b"{}";
+        let mut response: *mut ::std::os::raw::c_uchar = std::ptr::null_mut();
+        let mut response_size: usize = 0;
+
+        let result = IotHubClient::c_direct_method_callback(
+            method_name.as_ptr(),
+            payload.as_ptr(),
+            payload.len(),
+            &mut response,
+            &mut response_size,
+            &mut tx as *mut DirectMethodObserver as *mut c_void,
+        );
+
+        assert_eq!(result, 401);
+        assert!(!response.is_null());
+        drop(unsafe { CString::from_raw(response as *mut ::std::os::raw::c_char) });
+    }
+
+    #[test]
+    fn c2d_message_callback_with_closed_channel() {
+        let (tx, rx) = mpsc::channel::<IncomingIotMessage>(1);
+        drop(rx);
+        let mut observer = IncomingMessageObserver::new(tx, vec![]);
+        let body = b"test";
+
+        unsafe {
+            let handle = IoTHubMessage_CreateFromByteArray(body.as_ptr(), body.len());
+            assert!(!handle.is_null());
+
+            let result = IotHubClient::c_c2d_message_callback(
+                handle,
+                &mut observer as *mut IncomingMessageObserver as *mut c_void,
+            );
+
+            IoTHubMessage_Destroy(handle);
+            assert_eq!(
+                result,
+                IOTHUBMESSAGE_DISPOSITION_RESULT_TAG_IOTHUBMESSAGE_ABANDONED
+            );
+        }
     }
 }
